@@ -1,0 +1,80 @@
+---
+---
+
+<main class="popup-container hidden" id="setup-view">
+    <header>
+        <div
+            style="display: flex; justify-content: space-between; align-items: start;"
+        >
+            <div>
+                <h1 style="font-size: 1.4rem;">Setup & Config</h1>
+                <p>API Keys & Preferences</p>
+            </div>
+            <button
+                id="close-settings-btn"
+                class="icon-button"
+                aria-label="Close"
+                title="Go Back"
+            >
+                ❌
+            </button>
+        </div>
+    </header>
+
+    <section class="card">
+        <h3 style="margin-top: 0;">LLM Configuration</h3>
+        <p style="font-size: 0.85rem; margin-bottom: 8px;">
+            Master password (optional):
+        </p>
+        <input
+            type="password"
+            id="encryption-password"
+            placeholder="Create a master password"
+            style="width: 100%;"
+        />
+
+        <div class="mt">
+            <p style="font-size: 0.85rem; margin-bottom: 8px;">
+                Provider & API Key:
+            </p>
+            <select
+                id="provider-select"
+                style="width: 100%; margin-bottom: 6px;"
+            >
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openrouter">OpenRouter</option>
+            </select>
+            <input
+                type="password"
+                id="api-key"
+                placeholder="Enter your LLM API Key"
+                style="width: 100%;"
+            />
+        </div>
+        <button id="fetch-models-btn" class="btn mt" style="width: 100%;"
+            >Fetch Models</button
+        >
+
+        <p
+            style="font-size: 0.85rem; margin-bottom: 8px; margin-top: var(--spacing-md);"
+        >
+            Select Model:
+        </p>
+        <select id="model-select" style="width: 100%;" disabled>
+            <option value="">Enter API Key to fetch...</option>
+        </select>
+        <p
+            id="model-status"
+            class="status-msg mt"
+            style="font-size: 0.8rem; color: var(--color-primary);"
+        >
+        </p>
+
+        <button
+            class="primary mt"
+            id="finish-setup-btn"
+            style="width: 100%; margin-top: var(--spacing-lg);"
+            >Save Configuration</button
+        >
+    </section>
+</main>

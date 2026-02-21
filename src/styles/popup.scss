@@ -1,0 +1,60 @@
+/* 
+ * Popup Action Panel Styles 
+ */
+
+body {
+    width: 350px;
+    min-height: 480px;
+    padding: var(--spacing-md);
+    margin: 0;
+    background-color: var(--color-bg);
+}
+
+.popup-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.action-card {
+    text-align: center;
+
+    button,
+    input {
+        width: 100%;
+        margin-top: var(--spacing-sm);
+    }
+
+    .status-msg {
+        font-size: 0.8rem;
+        color: var(--color-primary);
+    }
+}
+
+.chat-interface {
+    display: flex;
+    flex-direction: column;
+    height: 220px;
+
+    .chat-history {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: var(--spacing-sm);
+        padding-bottom: var(--spacing-md);
+
+        .placeholder-text {
+            font-size: 0.85rem;
+            text-align: center;
+            font-style: italic;
+        }
+    }
+
+    .chat-input-wrapper {
+        display: flex;
+        gap: var(--spacing-xs);
+
+        input {
+            flex: 1;
+        }
+    }
+}

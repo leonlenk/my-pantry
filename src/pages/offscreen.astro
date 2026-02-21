@@ -1,0 +1,90 @@
+---
+// offscreen.astro
+// This Astro page generates the offscreen.html entry for the Chrome Offscreen API.
+// It is a minimal shell that only loads the embedder script as a module.
+// Chrome spawns this as a hidden document to safely run Transformers.js WASM
+// outside the Service Worker's 30-second timeout limit.
+---
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Recipe AI Offscreen</title>
+    </head>
+    <body>
+        <script>
+            /// <reference types="chrome" />
+            import { pipeline, env } from "@xenova/transformers";
+
+            // Allow Transformers.js to cache the model in the browser Cache API.
+            // Do NOT load local models (no bundling) - fetch from HuggingFace on first use.
+            // @ts-ignore
+            env.allowLocalModels = false;
+            // @ts-ignore
+            env.useBrowserCache = true;
+
+            let extractor: Awaited<ReturnType<typeof pipeline>> | null = null;
+
+            async function getExtractor() {
+                if (!extractor) {
+                    // Quantized ONNX model (~22MB), downloaded on-demand and cached indefinitely.
+                    // Running here instead of the Service Worker prevents V3 timeout crashes.
+                    extractor = await pipeline(
+                        "feature-extraction",
+                        "Xenova/all-MiniLM-L6-v2",
+                        { quantized: true }
+                    );
+                }
+                return extractor;
+            }
+
+            // Listen for embedding requests from the background service worker
+            chrome.runtime.onMessage.addListener(
+                (message, _sender, sendResponse) => {
+                    if (
+                        message.type !== "GENERATE_EMBEDDING" ||
+                        message.target !== "offscreen"
+                    )
+                        return;
+
+                    const text: string = message.text;
+
+                    // Return true to keep chrome message channel open for async response
+                    (async () => {
+                        try {
+                            console.log(
+                                "[Recipe AI Offscreen] Generating embedding for text length:",
+                                text.length
+                            );
+                            const pipe = await getExtractor();
+                            const output = await (pipe as any)(text, {
+                                pooling: "mean",
+                                normalize: true,
+                            });
+                            // Serialize the Float32Array tensor output to a plain JS number array
+                            const embedding: number[] = Array.from(
+                                output.data as Float32Array
+                            );
+                            console.log(
+                                `[Recipe AI Offscreen] Done. Embedding dimension: ${embedding.length}`
+                            );
+                            sendResponse({ success: true, embedding });
+                        } catch (error: any) {
+                            console.error(
+                                "[Recipe AI Offscreen] Embedding failed:",
+                                error
+                            );
+                            sendResponse({
+                                success: false,
+                                error: error.message,
+                            });
+                        }
+                    })();
+
+                    return true; // Signal async response
+                }
+            );
+        </script>
+    </body>
+</html>
