@@ -14,7 +14,14 @@ export default defineConfig({
       exclude: ["@xenova/transformers", "onnxruntime-web"],
     },
     build: {
+      chunkSizeWarningLimit: 1500,
       rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === 'EVAL' && warning.id?.includes('onnxruntime-web')) {
+            return;
+          }
+          warn(warning);
+        },
         input: {
           background: "src/background.ts"
         },

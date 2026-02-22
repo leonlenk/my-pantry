@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && npx esbuild src/background.ts --bundle --outfile=dist/background.js && npx esbuild src/utils/readability-wrapper.ts --bundle --outfile=dist/Readability.js",
+    "build": "astro build && esbuild src/background.ts --bundle --outfile=dist/background.js && esbuild src/utils/readability-wrapper.ts --bundle --outfile=dist/Readability.js",
     "preview": "astro preview",
     "astro": "astro",
     "build:watch": "astro build --watch",
-    "test": "npm run build && web-ext run -s dist",
-    "test:firefox": "npm run build && web-ext run -t firefox-desktop -s dist",
-    "test:chromium": "npm run build && web-ext run -t chromium -s dist"
+    "test": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -s dist",
+    "test:firefox": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -t firefox-desktop -s dist",
+    "test:chromium": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -t chromium -s dist"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
