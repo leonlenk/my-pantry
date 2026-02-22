@@ -2,14 +2,35 @@
 ---
 
 <header class="top-bar">
-    <div class="search-wrap">
-        <input
-            type="text"
-            id="semantic-search"
-            placeholder="Semantic search: e.g. 'A spicy high-protein dinner'"
-        />
-        <button class="primary" id="search-btn">Search</button>
+    <div class="top-row">
+        <div class="search-wrap">
+            <input
+                type="text"
+                id="semantic-search"
+                placeholder="Semantic search: e.g. 'A spicy high-protein dinner'"
+            />
+            <button class="primary" id="search-btn">Search</button>
+        </div>
+        <span id="recipe-count" class="recipe-count"></span>
     </div>
-    <span id="recipe-count" class="recipe-count"></span>
-    <button class="auth-btn btn outline" id="unlock-btn">Unlock Keys</button>
+
+    <div class="filter-row">
+        <nav class="filters">
+            <ul>
+                <li>
+                    <button class="filter-btn active" data-filter="all"
+                        >All Recipes</button>
+                </li>
+                <li>
+                    <button class="filter-btn" data-filter="recent"
+                        >Recent Additions</button>
+                </li>
+                <li>
+                    <button class="filter-btn" data-filter="favorites"
+                        >Favorites</button>
+                </li>
+            </ul>
+        </nav>
+        <a href="setup.html" class="settings-link btn outline">Settings</a>
+    </div>
 </header>

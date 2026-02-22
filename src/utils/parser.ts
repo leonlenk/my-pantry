@@ -242,7 +242,7 @@ Extract the recipe into the specified JSON format.
         fetchHeaders = {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": window.location.origin,
+            "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "chrome-extension://recipe-ai",
             "X-Title": "Recipe AI"
         };
         fetchBody = {

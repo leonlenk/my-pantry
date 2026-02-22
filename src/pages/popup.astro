@@ -196,17 +196,71 @@ import SetupView from "../components/popup/SetupView.astro";
         }
       });
 
+      // Listen for background updates
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message.type === "EXTRACTION_STATUS_UPDATE") {
+          const { status, isError, isComplete } = message;
+          if (extractionStatus) {
+            extractionStatus.classList.remove("hidden");
+            extractionStatus.textContent = status;
+          }
+          if (isError && confirmExtractBtn) {
+            (confirmExtractBtn as HTMLButtonElement).disabled = false;
+            confirmExtractBtn.textContent = "Confirm Extraction";
+          }
+          if (isComplete || isError) {
+            // Let the user click it again if they want, or they can just close it
+            if (extractBtn) {
+              (extractBtn as HTMLButtonElement).disabled = false;
+              extractBtn.textContent = "Extract & Add to Pantry";
+            }
+          }
+        }
+      });
+
+      // Check for active extraction on load
+      document.addEventListener("DOMContentLoaded", async () => {
+        try {
+          if (typeof chrome !== "undefined" && chrome.tabs) {
+            const [tab] = await chrome.tabs.query({
+              active: true,
+              currentWindow: true,
+            });
+            if (tab && tab.id) {
+              const response = await chrome.runtime.sendMessage({
+                type: "GET_EXTRACTION_STATUS",
+                tabId: tab.id,
+              });
+              if (response && response.isActive) {
+                // Restore UI
+                extractBtn?.classList.add("hidden");
+                passwordContainer?.classList.remove("hidden");
+                if (passwordInput) passwordInput.classList.add("hidden");
+                if (confirmExtractBtn)
+                  confirmExtractBtn.classList.add("hidden");
+
+                if (extractionStatus) {
+                  extractionStatus.classList.remove("hidden");
+                  extractionStatus.textContent =
+                    response.status || "Extracting in background...";
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Could not check extraction status", e);
+        }
+      });
+
       async function executeExtraction(
         apiKey: string,
         llmModel: string,
         llmProvider: string
       ) {
-        console.log(
-          `[Recipe AI] Starting extraction with ${llmProvider} model: ${llmModel}`
-        );
         if (extractionStatus) {
           extractionStatus.classList.remove("hidden");
-          extractionStatus.textContent = "Extracting page content...";
+          extractionStatus.textContent =
+            "Initializing background extraction...";
         }
 
         const [tab] = await chrome.tabs.query({
@@ -220,115 +274,20 @@ import SetupView from "../components/popup/SetupView.astro";
           return;
         }
 
-        console.log(`[Recipe AI] Found active tab: ${tab.url}`);
+        console.log(
+          `[Recipe AI] Triggering background extraction for tab: ${tab.url}`
+        );
 
-        console.log("[Recipe AI] Checking for JSON-LD schema...");
-        let results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: checkJsonLd,
-        });
-
-        let extractedData = results?.[0]?.result;
-
-        if (!extractedData) {
-          console.log(
-            "[Recipe AI] No JSON-LD found. Injecting Readability fallback..."
-          );
-          if (extractionStatus)
-            extractionStatus.textContent = "Loading Readability fallback...";
-
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ["Readability.js"],
-          });
-
-          console.log("[Recipe AI] Executing Readability extraction...");
-          results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: extractWithReadability,
-          });
-
-          extractedData = results?.[0]?.result;
-        }
-
-        if (!extractedData) {
-          console.error("[Recipe AI] Extraction failed: No results returned.");
-          if (extractionStatus)
-            extractionStatus.textContent = "Extraction failed on this page.";
-          return;
-        }
-
-        // Branch on extraction source for logging and user-facing status.
-        if (extractedData.source === "json-ld") {
-          console.log(
-            "[Recipe AI] JSON-LD schema found, skipping Readability."
-          );
-          if (extractionStatus)
-            extractionStatus.textContent =
-              "Analyzing structured recipe data...";
-        } else {
-          console.log(
-            "[Recipe AI] No JSON-LD found, using Readability fallback.",
-            `Text length: ${extractedData.textContent?.length ?? 0} chars.`
-          );
-          if (extractionStatus)
-            extractionStatus.textContent = "Sending to LLM for analysis...";
-        }
-
-        console.log("[Recipe AI] Sending request to LLM API...");
-        const recipeData = await extractRecipeWithClaude(
-          extractedData,
+        // Send message to background script to take over
+        chrome.runtime.sendMessage({
+          type: "START_EXTRACTION",
+          tabId: tab.id,
           apiKey,
           llmModel,
-          llmProvider
-        );
-
-        console.log("Successfully parsed recipe:", recipeData);
-
-        // Generate a vector embedding via the hidden offscreen document
-        if (extractionStatus)
-          extractionStatus.textContent = "Generating embedding vector...";
-        console.log(
-          "[Recipe AI] Requesting embedding from background script..."
-        );
-
-        const textToEmbed = [
-          recipeData.title,
-          recipeData.description,
-          ...(recipeData.tags || []),
-          ...(recipeData.ingredients?.map((i: any) => i.item) || []),
-        ].join(", ");
-
-        const embeddingResult: {
-          success: boolean;
-          embedding?: number[];
-          error?: string;
-        } = await chrome.runtime.sendMessage({
-          type: "GENERATE_EMBEDDING",
-          text: textToEmbed,
+          llmProvider,
         });
 
-        if (embeddingResult.success && embeddingResult.embedding) {
-          console.log(
-            `[Recipe AI] Embedding generated (${embeddingResult.embedding.length} dims).`
-          );
-          recipeData.embedding = embeddingResult.embedding;
-        } else {
-          console.warn(
-            "[Recipe AI] Embedding failed, saving without vector:",
-            embeddingResult.error
-          );
-        }
-
-        // Save to IndexedDB (always local, no server required)
-        if (extractionStatus)
-          extractionStatus.textContent = "Saving to local database...";
-        console.log("[Recipe AI] Saving recipe to IndexedDB...");
-        await saveRecipeLocally(recipeData);
-        console.log("[Recipe AI] Saved to IndexedDB successfully.");
-
-        if (extractionStatus)
-          extractionStatus.textContent = "Recipe saved! Open Pantry to view.";
+        // Background will start sending EXTRACTION_STATUS_UPDATE messages
       }
 
       // ------------- Setup logic -------------

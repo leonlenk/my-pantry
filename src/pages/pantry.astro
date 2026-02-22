@@ -1,7 +1,6 @@
 ---
 import "../styles/global.scss";
 import "../styles/pantry.scss";
-import Sidebar from "../components/pantry/Sidebar.astro";
 import TopBar from "../components/pantry/TopBar.astro";
 import RecipeGrid from "../components/pantry/RecipeGrid.astro";
 ---
@@ -15,8 +14,6 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
   </head>
   <body>
     <div class="pantry-layout">
-      <Sidebar />
-
       <main class="content">
         <TopBar />
         <RecipeGrid />
@@ -24,7 +21,12 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
     </div>
 
     <script>
-      import { getAllRecipes, deleteRecipe, searchRecipes } from "../utils/db";
+      import {
+        getAllRecipes,
+        deleteRecipe,
+        searchRecipes,
+        saveRecipeLocally,
+      } from "../utils/db";
       import type { Recipe } from "../types/recipe";
 
       declare const chrome: any;
@@ -38,6 +40,8 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         "search-btn"
       ) as HTMLButtonElement;
       const recipeCountEl = document.getElementById("recipe-count");
+      const filterLinks = document.querySelectorAll(".filter-btn");
+      let currentFilter = "all";
 
       document.addEventListener("DOMContentLoaded", async () => {
         // Redirect to setup if not configured
@@ -55,11 +59,29 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           }
         }
 
+        filterLinks.forEach((link) => {
+          link.addEventListener("click", async (e) => {
+            e.preventDefault();
+            filterLinks.forEach((l) => l.classList.remove("active"));
+            (e.currentTarget as HTMLElement).classList.add("active");
+            currentFilter =
+              (e.currentTarget as HTMLElement).dataset.filter || "all";
+            await loadRecipes();
+          });
+        });
+
         await loadRecipes();
       });
 
       async function loadRecipes() {
-        const recipes = await getAllRecipes();
+        let recipes = await getAllRecipes();
+
+        if (currentFilter === "recent") {
+          recipes = recipes.reverse();
+        } else if (currentFilter === "favorites") {
+          recipes = recipes.filter((r) => r.isFavorite);
+        }
+
         if (recipeCountEl)
           recipeCountEl.textContent = `${recipes.length} recipe${
             recipes.length !== 1 ? "s" : ""
@@ -104,9 +126,16 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           card.innerHTML = `
           <div class="card-header">
             <h3>${recipe.title}</h3>
-            <button class="delete-btn" data-id="${
-              recipe.id
-            }" title="Delete recipe">✕</button>
+            <div class="card-actions">
+              <button class="favorite-btn" data-id="${
+                recipe.id
+              }" title="Toggle favorite">
+                ${recipe.isFavorite ? "★" : "☆"}
+              </button>
+              <button class="delete-btn" data-id="${
+                recipe.id
+              }" title="Delete recipe">✕</button>
+            </div>
           </div>
           ${metaHtml ? `<p class="meta">${metaHtml}</p>` : ""}
           <p class="desc">${description}${
@@ -121,6 +150,37 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
             }
           </div>
         `;
+
+          card.addEventListener("click", () => {
+            window.location.href = `recipe.html?id=${recipe.id}`;
+          });
+
+          card.querySelector(".view-btn")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+          });
+
+          card
+            .querySelector(".favorite-btn")
+            ?.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              recipe.isFavorite = !recipe.isFavorite;
+              await saveRecipeLocally(recipe);
+              if (currentFilter === "favorites" && !recipe.isFavorite) {
+                card.remove();
+                const remaining = grid.querySelectorAll(".recipe-card").length;
+                if (recipeCountEl)
+                  recipeCountEl.textContent = `${remaining} recipe${
+                    remaining !== 1 ? "s" : ""
+                  }`;
+                if (remaining === 0) {
+                  grid.classList.add("hidden");
+                  emptyState.classList.remove("hidden");
+                }
+              } else {
+                (e.currentTarget as HTMLButtonElement).textContent =
+                  recipe.isFavorite ? "★" : "☆";
+              }
+            });
 
           card
             .querySelector(".delete-btn")

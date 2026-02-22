@@ -5,6 +5,7 @@ export interface Recipe {
     description: string;
     author?: string;
     image?: string; // URL to the main recipe image
+    isFavorite?: boolean;
 
     prepTimeMinutes?: number;
     cookTimeMinutes?: number;

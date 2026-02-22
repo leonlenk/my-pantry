@@ -42,6 +42,21 @@ export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
 }
 
 /**
+ * Retrieves a single recipe by its id from IndexedDB.
+ */
+export async function getRecipe(id: string): Promise<Recipe | undefined> {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result as Recipe | undefined);
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => db.close();
+    });
+}
+
+/**
  * Retrieves all recipes from IndexedDB.
  */
 export async function getAllRecipes(): Promise<Recipe[]> {

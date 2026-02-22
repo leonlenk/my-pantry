@@ -1,0 +1,249 @@
+---
+import "../styles/global.scss";
+import "../styles/recipe.scss";
+---
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Recipe AI - Recipe View</title>
+    </head>
+    <body>
+        <div class="recipe-layout">
+            <header class="top-bar">
+                <button class="btn outline" id="back-btn"
+                    >← Back to Pantry</button
+                >
+                <a
+                    href="#"
+                    target="_blank"
+                    id="source-link"
+                    class="btn primary hidden">View Source</a
+                >
+            </header>
+
+            <main class="content" id="recipe-content">
+                <div id="loading" class="loading">Loading recipe...</div>
+                <div id="error-state" class="error-state hidden">
+                    <h2>Recipe not found</h2>
+                    <p>This recipe might have been deleted or never existed.</p>
+                    <a href="pantry.html" class="btn">Return to Pantry</a>
+                </div>
+
+                <article id="recipe-article" class="recipe-article hidden">
+                    <header class="article-header">
+                        <h1 id="recipe-title"></h1>
+                        <div class="meta-tags" id="recipe-meta"></div>
+                        <p class="description" id="recipe-desc"></p>
+                    </header>
+
+                    <div class="grid-layout">
+                        <section class="ingredients-section card">
+                            <div class="section-header">
+                                <h2>Ingredients</h2>
+                                <div class="batch-control">
+                                    <label for="batch-input">Batch Size:</label>
+                                    <input
+                                        type="number"
+                                        id="batch-input"
+                                        step="1"
+                                        min="1"
+                                        value="1"
+                                    />
+                                </div>
+                            </div>
+                            <ul id="ingredients-list" class="ingredients-list">
+                            </ul>
+                        </section>
+
+                        <section class="instructions-section">
+                            <h2>Instructions</h2>
+                            <div
+                                id="instructions-list"
+                                class="instructions-list"
+                            >
+                            </div>
+                        </section>
+                    </div>
+                </article>
+            </main>
+        </div>
+
+        <script>
+            import { getRecipe } from "../utils/db";
+
+            let currentRecipe: any = null;
+            let originalBatchSize = 1;
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const recipeId = urlParams.get("id");
+
+                document
+                    .getElementById("back-btn")
+                    ?.addEventListener("click", () => {
+                        window.location.href = "pantry.html";
+                    });
+
+                if (!recipeId) {
+                    showError();
+                    return;
+                }
+
+                try {
+                    const recipe = await getRecipe(recipeId);
+                    if (!recipe) {
+                        showError();
+                        return;
+                    }
+                    currentRecipe = recipe;
+                    renderRecipe(recipe);
+                } catch (e) {
+                    console.error(e);
+                    showError();
+                }
+            });
+
+            function showError() {
+                document.getElementById("loading")?.classList.add("hidden");
+                document
+                    .getElementById("error-state")
+                    ?.classList.remove("hidden");
+            }
+
+            function renderRecipe(recipe: any) {
+                document.getElementById("loading")?.classList.add("hidden");
+                const article = document.getElementById("recipe-article");
+                if (!article) return;
+
+                article.classList.remove("hidden");
+
+                // Title
+                const titleEl = document.getElementById("recipe-title");
+                if (titleEl) titleEl.textContent = recipe.title;
+
+                // Description
+                const descEl = document.getElementById("recipe-desc");
+                if (descEl && recipe.description)
+                    descEl.textContent = recipe.description;
+
+                // Source Link
+                const sourceLink = document.getElementById(
+                    "source-link"
+                ) as HTMLAnchorElement;
+                if (sourceLink && recipe.url) {
+                    sourceLink.href = recipe.url;
+                    sourceLink.classList.remove("hidden");
+                }
+
+                // Meta tags
+                const metaEl = document.getElementById("recipe-meta");
+                if (metaEl) {
+                    const metaHtml = [
+                        recipe.totalTimeMinutes
+                            ? `⏱ ${recipe.totalTimeMinutes}m`
+                            : null,
+                        recipe.servings
+                            ? `🍽 ${recipe.servings} servings`
+                            : null,
+                        recipe.yield ? `📦 ${recipe.yield}` : null,
+                    ].filter(Boolean);
+
+                    const tagsHtml = (recipe.tags || []).map(
+                        (t: string) => `<span class="tag">${t}</span>`
+                    );
+
+                    metaEl.innerHTML = `
+                    <div class="meta-info">${metaHtml.join(
+                        " &nbsp;·&nbsp; "
+                    )}</div>
+                    <div class="tags">${tagsHtml.join("")}</div>
+                `;
+                }
+
+                // Parse default batch size from yield
+                const batchInput = document.getElementById(
+                    "batch-input"
+                ) as HTMLInputElement;
+                if (batchInput) {
+                    originalBatchSize = parseBatchSize(recipe.yield);
+                    batchInput.value = originalBatchSize.toString();
+
+                    // Attach event listener once
+                    if (!batchInput.dataset.listenerAttached) {
+                        batchInput.addEventListener("input", (e) => {
+                            const newBatch = parseInt(
+                                (e.target as HTMLInputElement).value,
+                                10
+                            );
+                            if (!isNaN(newBatch) && newBatch > 0) {
+                                renderIngredients(
+                                    currentRecipe,
+                                    newBatch / originalBatchSize
+                                );
+                            }
+                        });
+                        batchInput.dataset.listenerAttached = "true";
+                    }
+                }
+
+                renderIngredients(recipe, 1);
+
+                // Instructions
+                const instructionsList =
+                    document.getElementById("instructions-list");
+                if (instructionsList && recipe.instructions) {
+                    recipe.instructions.forEach((inst: any) => {
+                        const div = document.createElement("div");
+                        div.className = "instruction-step";
+                        div.innerHTML = `
+                      <span class="step-num">${inst.stepNumber}</span>
+                      <p>${inst.text}</p>
+                  `;
+                        instructionsList.appendChild(div);
+                    });
+                }
+            }
+
+            function parseBatchSize(yieldStr?: string): number {
+                if (!yieldStr) return 1;
+                const match = yieldStr.match(/\d+/);
+                return match ? parseInt(match[0], 10) : 1;
+            }
+
+            function formatQuantity(q: number): string {
+                const rounded = Math.round(q * 100) / 100;
+                return rounded.toString();
+            }
+
+            function renderIngredients(recipe: any, multiplier: number) {
+                const ingredientsList =
+                    document.getElementById("ingredients-list");
+                if (!ingredientsList || !recipe || !recipe.ingredients) return;
+
+                ingredientsList.innerHTML = "";
+                recipe.ingredients.forEach((ing: any) => {
+                    const li = document.createElement("li");
+
+                    if (ing.quantity !== null && ing.quantity !== undefined) {
+                        const scaled = ing.quantity * multiplier;
+                        const formattedQuantity = formatQuantity(scaled);
+
+                        let text = `${formattedQuantity}`;
+                        if (ing.unit) text += ` ${ing.unit}`;
+                        if (ing.item) text += ` ${ing.item}`;
+                        if (ing.preparation) text += `, ${ing.preparation}`;
+
+                        li.textContent = text;
+                    } else {
+                        li.textContent = ing.rawText || ing.item;
+                    }
+
+                    ingredientsList.appendChild(li);
+                });
+            }
+        </script>
+    </body>
+</html>
