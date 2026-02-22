@@ -43,15 +43,36 @@ import "../styles/recipe.scss";
                         <section class="ingredients-section card">
                             <div class="section-header">
                                 <h2>Ingredients</h2>
-                                <div class="batch-control">
-                                    <label for="batch-input">Batch Size:</label>
-                                    <input
-                                        type="number"
-                                        id="batch-input"
-                                        step="1"
-                                        min="1"
-                                        value="1"
-                                    />
+                                <div
+                                    class="controls-row"
+                                    style="display: flex; gap: 1rem; align-items: center;"
+                                >
+                                    <div class="unit-control">
+                                        <select
+                                            id="unit-system-select"
+                                            class="btn outline"
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.9rem; margin: 0; min-height: 0;"
+                                        >
+                                            <option value="us"
+                                                >US (Volume)</option
+                                            >
+                                            <option value="metric"
+                                                >Metric (Grams)</option
+                                            >
+                                        </select>
+                                    </div>
+                                    <div class="batch-control">
+                                        <label for="batch-input"
+                                            >Batch Size:</label
+                                        >
+                                        <input
+                                            type="number"
+                                            id="batch-input"
+                                            step="1"
+                                            min="1"
+                                            value="1"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <ul id="ingredients-list" class="ingredients-list">
@@ -73,9 +94,11 @@ import "../styles/recipe.scss";
 
         <script>
             import { getRecipe } from "../utils/db";
+            import { convertVolumeToWeight } from "../utils/conversions";
 
             let currentRecipe: any = null;
             let originalBatchSize = 1;
+            let currentUnitSystem = "us"; // "us" or "metric"
 
             document.addEventListener("DOMContentLoaded", async () => {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -167,6 +190,8 @@ import "../styles/recipe.scss";
                 const batchInput = document.getElementById(
                     "batch-input"
                 ) as HTMLInputElement;
+                let currentMultiplier = 1;
+
                 if (batchInput) {
                     originalBatchSize = parseBatchSize(recipe.yield);
                     batchInput.value = originalBatchSize.toString();
@@ -179,9 +204,11 @@ import "../styles/recipe.scss";
                                 10
                             );
                             if (!isNaN(newBatch) && newBatch > 0) {
+                                currentMultiplier =
+                                    newBatch / originalBatchSize;
                                 renderIngredients(
                                     currentRecipe,
-                                    newBatch / originalBatchSize
+                                    currentMultiplier
                                 );
                             }
                         });
@@ -189,7 +216,28 @@ import "../styles/recipe.scss";
                     }
                 }
 
-                renderIngredients(recipe, 1);
+                const unitSelect = document.getElementById(
+                    "unit-system-select"
+                ) as HTMLSelectElement;
+                if (unitSelect && !unitSelect.dataset.listenerAttached) {
+                    unitSelect.addEventListener("change", (e) => {
+                        currentUnitSystem = (e.target as HTMLSelectElement)
+                            .value;
+                        const cbInput = document.getElementById(
+                            "batch-input"
+                        ) as HTMLInputElement;
+                        const mult = cbInput
+                            ? parseInt(cbInput.value, 10) / originalBatchSize
+                            : 1;
+                        renderIngredients(
+                            currentRecipe,
+                            isNaN(mult) ? 1 : mult
+                        );
+                    });
+                    unitSelect.dataset.listenerAttached = "true";
+                }
+
+                renderIngredients(recipe, currentMultiplier);
 
                 // Instructions
                 const instructionsList =
@@ -229,10 +277,27 @@ import "../styles/recipe.scss";
 
                     if (ing.quantity !== null && ing.quantity !== undefined) {
                         const scaled = ing.quantity * multiplier;
-                        const formattedQuantity = formatQuantity(scaled);
+
+                        let displayQuantity = scaled;
+                        let displayUnit = ing.unit;
+
+                        if (currentUnitSystem === "metric" && displayUnit) {
+                            const conversion = convertVolumeToWeight(
+                                ing.item,
+                                scaled,
+                                displayUnit
+                            );
+                            if (conversion) {
+                                displayQuantity = conversion.quantity;
+                                displayUnit = conversion.unit;
+                            }
+                        }
+
+                        const formattedQuantity =
+                            formatQuantity(displayQuantity);
 
                         let text = `${formattedQuantity}`;
-                        if (ing.unit) text += ` ${ing.unit}`;
+                        if (displayUnit) text += ` ${displayUnit}`;
                         if (ing.item) text += ` ${ing.item}`;
                         if (ing.preparation) text += `, ${ing.preparation}`;
 
