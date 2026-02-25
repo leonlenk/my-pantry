@@ -10,9 +10,6 @@ importers:
 
   apps/extension:
     dependencies:
-      '@lucide/astro':
-        specifier: ^0.575.0
-        version: 0.575.0(astro@5.17.3(@types/node@25.3.0)(rollup@4.59.0)(sass@1.97.3)(typescript@5.9.3))
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -29,6 +26,9 @@ importers:
       '@types/chrome':
         specifier: ^0.1.37
         version: 0.1.37
+      '@types/feather-icons':
+        specifier: ^4.29.4
+        version: 4.29.4
       '@types/mozilla-readability':
         specifier: ^0.2.1
         version: 0.2.1
@@ -643,11 +643,6 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@lucide/astro@0.575.0':
-    resolution: {integrity: sha512-hU47BbgApVR473CxSk6C4OBxqO0P91ZrY9uYvQB7xqW9f5mqmkz1RJ4jl2iK2LovntrrfAZix5ce+r7v2+2gHg==}
-    peerDependencies:
-      astro: ^4 || ^5
-
   '@mdn/browser-compat-data@7.3.0':
     resolution: {integrity: sha512-B7X53zLkrQOVNzsWg4d+iE5vbrreOYB9H/2Ikeit9LPb3tqRNRsEAxysQduFLODBJBSgFGr2FkJLq7tMQkqLZQ==}
 
@@ -979,6 +974,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/feather-icons@4.29.4':
+    resolution: {integrity: sha512-cvwI455PWx/gJ33XDTIZOdauRy+XCxZggkOT/tAQYZLdySPFATD4RnDC9mxOnCIEaK9kwPm3zZigkAsMkhXb5w==}
 
   '@types/filesystem@0.0.36':
     resolution: {integrity: sha512-vPDXOZuannb9FZdxgHnqSwAG/jvdGM8Wq+6N4D/d80z+D4HWH+bItqsZaVRQykAn6WEVeEkLm2oQigyHtgb0RA==}
@@ -3661,10 +3659,6 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@lucide/astro@0.575.0(astro@5.17.3(@types/node@25.3.0)(rollup@4.59.0)(sass@1.97.3)(typescript@5.9.3))':
-    dependencies:
-      astro: 5.17.3(@types/node@25.3.0)(rollup@4.59.0)(sass@1.97.3)(typescript@5.9.3)
-
   '@mdn/browser-compat-data@7.3.0': {}
 
   '@mozilla/readability@0.6.0': {}
@@ -3907,6 +3901,8 @@ snapshots:
       '@types/ms': 2.1.0
 
   '@types/estree@1.0.8': {}
+
+  '@types/feather-icons@4.29.4': {}
 
   '@types/filesystem@0.0.36':
     dependencies:

@@ -1,6 +1,17 @@
 ---
 import "../styles/global.scss";
-import { Coffee, Key, Download } from "@lucide/astro";
+import feather from "feather-icons";
+const coffeeIcon = feather.icons["coffee"].toSvg({
+    width: 48,
+    height: 48,
+    color: "var(--color-accent)",
+});
+const keyIcon = feather.icons["key"].toSvg({ width: 18, height: 18 });
+const downloadIcon = feather.icons["download"].toSvg({
+    width: 48,
+    height: 48,
+    color: "var(--color-accent)",
+});
 ---
 
 <!DOCTYPE html>
@@ -158,7 +169,8 @@ import { Coffee, Key, Download } from "@lucide/astro";
                 <div class="provider-divider">OR</div>
 
                 <button id="btn-show-byok" class="btn outline byok">
-                    <Key size={18} />
+                    <span set:html={keyIcon}></span>
+
                     Bring Your Own Key
                 </button>
 
@@ -178,11 +190,10 @@ import { Coffee, Key, Download } from "@lucide/astro";
 
             <!-- STATE 2: DOWNLOADING AI MODEL -->
             <section id="step-downloading" class="view-state">
-                <Download
-                    size={48}
-                    color="var(--color-accent)"
-                    style="margin-bottom: 1rem;"
-                />
+                <span
+                    set:html={downloadIcon}
+                    style="display:block;margin-bottom:1rem;"></span>
+
                 <h2>Initializing Local AI...</h2>
                 <p class="text-meta" style="margin-bottom: 2rem;">
                     Downloading the vectorization engine (22MB). This only
@@ -202,11 +213,10 @@ import { Coffee, Key, Download } from "@lucide/astro";
 
             <!-- STATE 3: READY -->
             <section id="step-ready" class="view-state">
-                <Coffee
-                    size={48}
-                    color="var(--color-accent)"
-                    style="margin-bottom: 1rem;"
-                />
+                <span
+                    set:html={coffeeIcon}
+                    style="display:block;margin-bottom:1rem;"></span>
+
                 <h2>You're all set!</h2>
                 <p>
                     Pantry Clip is ready. You can now close this tab, pin the

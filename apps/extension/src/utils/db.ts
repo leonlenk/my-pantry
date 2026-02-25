@@ -127,7 +127,8 @@ export async function deleteRecipe(id: string): Promise<void> {
  */
 export async function searchRecipes(
     queryEmbedding: number[],
-    topK = 10
+    topK = 20,
+    minScore = 0.4 // Lowered threshold to be more permissive (0.65 was too strict)
 ): Promise<Recipe[]> {
     const all = await getAllRecipes();
 
@@ -144,6 +145,7 @@ export async function searchRecipes(
     return all
         .filter(r => r.embedding && r.embedding.length > 0)
         .map(r => ({ recipe: r, score: cosine(queryEmbedding, r.embedding!) }))
+        .filter(r => r.score >= minScore) // Cutoff for low similarity
         .sort((a, b) => b.score - a.score)
         .slice(0, topK)
         .map(r => r.recipe);

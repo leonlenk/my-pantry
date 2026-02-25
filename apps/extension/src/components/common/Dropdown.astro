@@ -1,0 +1,134 @@
+---
+interface Props {
+    id: string;
+    label: string;
+    className?: string;
+    items?: { value: string; label: string }[];
+    placeholderId?: string;
+    initialValue?: string;
+}
+
+const {
+    id,
+    label,
+    className = "",
+    items = [],
+    placeholderId,
+    initialValue,
+} = Astro.props;
+---
+
+<div class={`custom-dropdown ${className}`} id={id} data-dropdown>
+    <button
+        class="dropdown-trigger"
+        id={`${id}-trigger`}
+        data-dropdown-trigger
+        type="button"
+    >
+        <span id={placeholderId || `${id}-label`}>{label}</span>
+        <svg
+            class="dropdown-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        >
+            <path d="m6 9 6 6 6-6"></path>
+        </svg>
+    </button>
+    <div class="dropdown-menu" id={`${id}-menu`} data-dropdown-menu>
+        {
+            items.map((item) => (
+                <div
+                    class={`dropdown-item ${
+                        item.value === initialValue ? "active" : ""
+                    }`}
+                    data-value={item.value}
+                >
+                    {item.label}
+                </div>
+            ))
+        }
+    </div>
+</div>
+
+<script>
+    function initDropdowns() {
+        // Close all dropdowns
+        function closeAll() {
+            document
+                .querySelectorAll("[data-dropdown-trigger]")
+                .forEach((t) => t.classList.remove("active"));
+            document
+                .querySelectorAll("[data-dropdown-menu]")
+                .forEach((m) => m.classList.remove("show"));
+        }
+
+        // Toggle dropdown
+        document.addEventListener("click", (e) => {
+            const target = e.target as HTMLElement;
+            const trigger = target.closest("[data-dropdown-trigger]");
+
+            if (trigger) {
+                e.stopPropagation();
+                const menu = trigger.nextElementSibling;
+                const isActive = trigger.classList.contains("active");
+
+                closeAll();
+
+                if (!isActive) {
+                    trigger.classList.add("active");
+                    menu?.classList.add("show");
+                }
+            } else {
+                closeAll();
+            }
+        });
+
+        // Handle item selection (for static items)
+        document.addEventListener("click", (e) => {
+            const item = (e.target as HTMLElement).closest(".dropdown-item");
+            if (item) {
+                const dropdown = item.closest("[data-dropdown]");
+                if (dropdown) {
+                    const trigger = dropdown.querySelector(
+                        "[data-dropdown-trigger]"
+                    );
+                    const label = trigger?.querySelector("span");
+                    const value = item.getAttribute("data-value");
+                    const text = item.textContent;
+
+                    // Only update label and emit event if it's not a dynamic dropdown
+                    // handled by external scripts (like in pantry)
+                    // Actually, we can always emit the event, and let the external script decide.
+
+                    if (label && text) {
+                        label.textContent = text;
+
+                        // Update active state in menu
+                        dropdown
+                            .querySelectorAll(".dropdown-item")
+                            .forEach((i) => i.classList.remove("active"));
+                        item.classList.add("active");
+                    }
+
+                    dropdown.dispatchEvent(
+                        new CustomEvent("change", {
+                            detail: { value, label: text },
+                        })
+                    );
+                }
+            }
+        });
+    }
+
+    // Use a singleton pattern to ensure we only attach listeners once
+    if (!(window as any).__dropdownsInitialized) {
+        initDropdowns();
+        (window as any).__dropdownsInitialized = true;
+    }
+</script>

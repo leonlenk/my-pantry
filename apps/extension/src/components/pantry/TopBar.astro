@@ -1,51 +1,54 @@
 ---
+import feather from "feather-icons";
+import Dropdown from "../common/Dropdown.astro";
+const searchIcon =
+    feather.icons["search"]?.toSvg({ width: 18, height: 18 }) || "";
+const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
 ---
 
 <header class="top-bar">
     <div class="top-row">
-        <div
-            class="filters-container"
-            style="flex: 1; display: flex; align-items: center;"
-        >
+        <!-- LEFT: Primary filters -->
+        <div class="left-section">
             <nav class="filters">
-                <ul>
-                    <li>
-                        <button class="filter-btn active" data-filter="all"
-                            >All</button
-                        >
-                    </li>
-                    <li>
-                        <button class="filter-btn" data-filter="recent"
-                            >Recent</button
-                        >
-                    </li>
-                    <li>
-                        <button class="filter-btn" data-filter="favorites"
-                            >Favorites</button
-                        >
-                    </li>
-                    <li>
-                        <select
-                            id="tag-filter"
-                            class="filter-select"
-                            style="margin-left: var(--spacing-sm);"
-                        >
-                            <option value="">Tags</option>
-                        </select>
-                    </li>
-                </ul>
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="recent">Recent</button>
+                <button class="filter-btn" data-filter="favorites"
+                    >Favorites</button
+                >
             </nav>
         </div>
-        <div class="search-wrap">
-            <input
-                type="text"
-                id="semantic-search"
-                placeholder="Semantic search: e.g. 'A spicy high-protein dinner'"
-            />
-            <button class="primary" id="search-btn">Search</button>
+
+        <!-- CENTER: Search bar + recipe count underneath -->
+        <div class="center-section">
+            <div class="search-wrap">
+                <span class="search-icon" set:html={searchIcon}></span>
+                <input
+                    type="text"
+                    id="semantic-search"
+                    placeholder="Semantic search: e.g. 'A spicy high-protein dinner'..."
+                />
+                <button
+                    id="clear-search"
+                    class="clear-btn"
+                    title="Clear search"
+                >
+                    <span set:html={clearIcon}></span>
+                </button>
+                <button class="primary" id="search-btn">Search</button>
+            </div>
+            <div class="count-wrap">
+                <span id="recipe-count" class="recipe-count"></span>
+            </div>
         </div>
-        <div style="flex: 1; text-align: right;">
-            <span id="recipe-count" class="recipe-count"></span>
+
+        <!-- RIGHT: Tag Dropdown -->
+        <div class="right-section">
+            <Dropdown
+                id="tag-dropdown"
+                label="All Tags"
+                placeholderId="selected-tag"
+            />
         </div>
     </div>
 </header>

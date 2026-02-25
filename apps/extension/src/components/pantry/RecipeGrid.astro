@@ -1,4 +1,7 @@
 ---
+import feather from "feather-icons";
+// book-open is a good metaphor for an empty recipe collection
+const emptyIcon = feather.icons["book-open"].toSvg({ width: 48, height: 48 });
 ---
 
 <section class="recipe-grid" id="recipe-grid">
@@ -7,7 +10,7 @@
 
 <!-- Empty State -->
 <div id="empty-state" class="empty-state hidden">
-    <div class="empty-icon">🍳</div>
+    <div class="empty-icon" set:html={emptyIcon}></div>
     <h3>Your pantry is empty</h3>
     <p>Extract recipes from the web using the Recipe AI extension panel.</p>
 </div>

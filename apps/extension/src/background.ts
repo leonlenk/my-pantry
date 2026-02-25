@@ -10,6 +10,7 @@ let creating: Promise<void> | null;
 interface ExtractionState {
     status: string;
     tabId: number;
+    title?: string;
 }
 const activeExtractions: Record<string, ExtractionState> = {};
 
@@ -44,6 +45,110 @@ function normalizeUrl(url: string): string {
     return url.replace(/\/$/, "");
 }
 
+/**
+ * Parses a JWT payload and checks if it is expired or within `bufferMinutes` of expiring.
+ */
+function isTokenExpired(token: string, bufferMinutes: number = 5): boolean {
+    try {
+        // JWT is header.payload.signature
+        const payloadBase64Url = token.split(".")[1];
+        if (!payloadBase64Url) return true;
+
+        // Convert Base64Url to Base64
+        const payloadBase64 = payloadBase64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const jsonPayload = decodeURIComponent(
+            atob(payloadBase64)
+                .split("")
+                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                .join("")
+        );
+
+        const decoded = JSON.parse(jsonPayload);
+        if (!decoded.exp) return true;
+
+        // exp is in seconds, convert to ms
+        const expiresAt = decoded.exp * 1000;
+        const now = Date.now();
+        const bufferMs = bufferMinutes * 60 * 1000;
+
+        return now >= (expiresAt - bufferMs);
+    } catch (e) {
+        console.warn("[Auth] Failed to decode JWT to check expiry", e);
+        return true; // Assume expired if we can't parse it
+    }
+}
+
+/**
+ * Attempts to silently refresh the Supabase access token using the stored refresh token.
+ * Persists the new access token to chrome.storage.local on success.
+ * Returns the fresh access token, or null if refresh fails.
+ */
+async function refreshSupabaseToken(): Promise<string | null> {
+    const stored = await chrome.storage.local.get([
+        "supabaseRefreshToken",
+        "supabaseToken",
+        "supabaseUrl",
+        "supabaseAnonKey"
+    ]);
+
+    const supabaseUrl = stored.supabaseUrl as string;
+    const supabaseAnonKey = stored.supabaseAnonKey as string;
+    const refreshToken = stored.supabaseRefreshToken as string | undefined;
+    const currentToken = stored.supabaseToken as string | undefined;
+
+    if (!refreshToken) {
+        console.warn("[Auth] No refresh token stored — user must re-authenticate.");
+        return null;
+    }
+
+    if (!supabaseUrl || supabaseUrl.includes("your-project-ref")) {
+        // BYOK mode — no Supabase configured, skip refresh
+        return currentToken ?? null;
+    }
+
+    // If we have a valid token that isn't expiring soon, just use it
+    if (currentToken && !isTokenExpired(currentToken)) {
+        return currentToken;
+    }
+
+    console.log("[Auth] Token is missing or expiring soon. Attempting refresh...");
+
+    if (!supabaseAnonKey) {
+        console.error("[Auth] Missing Supabase Anon Key. Cannot refresh token.");
+        return null;
+    }
+
+    try {
+        const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "apikey": supabaseAnonKey },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (!res.ok) {
+            console.warn("[Auth] Token refresh failed:", res.status, await res.text());
+            return null;
+        }
+
+        const data = await res.json();
+        const newAccessToken: string = data.access_token;
+        const newRefreshToken: string = data.refresh_token;
+
+        if (newAccessToken) {
+            await chrome.storage.local.set({
+                supabaseToken: newAccessToken,
+                supabaseRefreshToken: newRefreshToken ?? refreshToken,
+            });
+            console.log("[Auth] Token refreshed successfully.");
+            return newAccessToken;
+        }
+    } catch (err) {
+        console.warn("[Auth] Token refresh threw:", err);
+    }
+
+    return null;
+}
+
 async function setupOffscreenDocument() {
     const offscreenUrl = chrome.runtime.getURL('offscreen.html');
     // Check if it already exists
@@ -70,14 +175,17 @@ async function setupOffscreenDocument() {
     }
 }
 
-async function updateExtractionStatus(url: string, tabId: number, status: string, isError: boolean = false, isComplete: boolean = false) {
+async function updateExtractionStatus(url: string, tabId: number, status: string, isError: boolean = false, isComplete: boolean = false, recipeTitle?: string) {
     const normUrl = normalizeUrl(url);
+    const existingTitle = activeExtractions[normUrl]?.title;
+    const finalTitle = recipeTitle || existingTitle;
+
     if (isComplete || isError) {
         delete activeExtractions[normUrl];
         chrome.action.setBadgeText({ text: isError ? "ERR" : "✓", tabId }).catch(() => { });
         chrome.action.setBadgeBackgroundColor({ color: isError ? "#EF4444" : "#10B981", tabId }).catch(() => { });
     } else {
-        activeExtractions[normUrl] = { status, tabId };
+        activeExtractions[normUrl] = { status, tabId, title: finalTitle };
         chrome.action.setBadgeText({ text: "...", tabId }).catch(() => { });
         chrome.action.setBadgeBackgroundColor({ color: "#F59E0B", tabId }).catch(() => { });
     }
@@ -89,7 +197,8 @@ async function updateExtractionStatus(url: string, tabId: number, status: string
             url: normUrl,
             status,
             isError,
-            isComplete
+            isComplete,
+            recipeTitle: finalTitle
         });
     } catch (e) {
         // Popup is closed, ignore error
@@ -104,6 +213,18 @@ async function updateExtractionStatus(url: string, tabId: number, status: string
 async function executeExtractionInBackground(url: string, tabId: number, apiKey: string, llmModel: string, llmProvider: string) {
     try {
         startKeepAlive();
+
+        // Proactively refresh the Supabase token before the LLM call to avoid mid-request 401s.
+        // Only relevant for the cloud/google provider that authenticates via Supabase JWTs.
+        if (llmProvider === "google") {
+            const freshToken = await refreshSupabaseToken();
+            if (freshToken) {
+                apiKey = freshToken;
+            } else {
+                console.warn("[Auth] Could not refresh token; proceeding with existing key.");
+            }
+        }
+
         await updateExtractionStatus(url, tabId, "Extracting page content...");
         console.log(`[Recipe AI] Starting background extraction for ${url} (tab ${tabId}) with ${llmProvider} model: ${llmModel}`);
 
@@ -149,23 +270,25 @@ async function executeExtractionInBackground(url: string, tabId: number, apiKey:
             throw new Error("Extraction failed: No results returned from page.");
         }
 
+        const recipeTitle = (extractedData as any)?.jsonLd?.name || undefined;
+
         if (extractedData.source === "json-ld") {
             const hasText = !!extractedData.recipeText;
             console.log(`[Recipe AI] JSON-LD schema found (Contains dom text? ${hasText})`);
-            await updateExtractionStatus(url, tabId, "Analyzing structured recipe data...");
+            await updateExtractionStatus(url, tabId, "Analyzing structured recipe data...", false, false, recipeTitle);
         } else if (extractedData.source === "dom-target") {
             console.log(`[Recipe AI] Extracted recipe card only`, `Text length: ${extractedData.recipeText?.length ?? 0} chars.`);
             const charCount = extractedData.recipeText?.length ?? 0;
             const formattedCount = new Intl.NumberFormat().format(charCount);
-            await updateExtractionStatus(url, tabId, `Processing localized recipe card (${formattedCount} chars)...`);
+            await updateExtractionStatus(url, tabId, `Processing localized recipe card (${formattedCount} chars)...`, false, false, recipeTitle);
         } else {
             console.log("[Recipe AI] Used comprehensive Readability fallback.", `Text length: ${extractedData.textContent?.length ?? 0} chars.`);
             const charCount = extractedData.textContent?.length ?? 0;
             const formattedCount = new Intl.NumberFormat().format(charCount);
             if (charCount > 10000) {
-                await updateExtractionStatus(url, tabId, `Processing large text (${formattedCount} chars)...`);
+                await updateExtractionStatus(url, tabId, `Processing large text (${formattedCount} chars)...`, false, false, recipeTitle);
             } else {
-                await updateExtractionStatus(url, tabId, `Reading page text (${formattedCount} chars)...`);
+                await updateExtractionStatus(url, tabId, `Reading page text (${formattedCount} chars)...`, false, false, recipeTitle);
             }
         }
 

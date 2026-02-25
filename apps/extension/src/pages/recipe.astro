@@ -1,6 +1,13 @@
 ---
 import "../styles/global.scss";
 import "../styles/recipe.scss";
+import Dropdown from "../components/common/Dropdown.astro";
+import feather from "feather-icons";
+
+const editIcon =
+    feather.icons["edit-3"]?.toSvg({ width: 16, height: 16 }) || "";
+const sparkleIcon =
+    feather.icons["zap"]?.toSvg({ width: 16, height: 16 }) || "";
 ---
 
 <!DOCTYPE html>
@@ -56,8 +63,8 @@ import "../styles/recipe.scss";
                                 <button
                                     id="edit-title-btn"
                                     class="title-pencil"
-                                    title="Edit Title">✏️</button
-                                >
+                                    title="Edit Title"
+                                    set:html={editIcon}></button>
                             </div>
                         </div>
                         <div class="meta-tags" id="recipe-meta"></div>
@@ -76,18 +83,22 @@ import "../styles/recipe.scss";
                                     style="display: flex; gap: 1rem; align-items: center; width: 100%; justify-content: space-between;"
                                 >
                                     <div class="unit-control">
-                                        <select
+                                        <Dropdown
                                             id="unit-system-select"
-                                            class="btn outline"
-                                            style="padding: 0.25rem 0.5rem; font-size: 0.9rem; margin: 0; min-height: 0;"
-                                        >
-                                            <option value="us"
-                                                >US (Volume)</option
-                                            >
-                                            <option value="metric"
-                                                >Metric (Grams)</option
-                                            >
-                                        </select>
+                                            label="US (Volume)"
+                                            className="left-aligned"
+                                            initialValue="us"
+                                            items={[
+                                                {
+                                                    value: "us",
+                                                    label: "US (Volume)",
+                                                },
+                                                {
+                                                    value: "metric",
+                                                    label: "Metric (Grams)",
+                                                },
+                                            ]}
+                                        />
                                     </div>
                                     <div class="batch-control">
                                         <label for="batch-input">Yield:</label>
@@ -108,9 +119,11 @@ import "../styles/recipe.scss";
                                 <button
                                     id="open-sub-modal-btn"
                                     class="btn outline"
-                                    style="font-size: 0.85rem; padding: 0.3rem 0.6rem;"
-                                    >✨ Ask for Substitutions</button
+                                    style="font-size: 0.85rem; padding: 0.3rem 0.6rem; display: flex; align-items: center; gap: 6px;"
                                 >
+                                    <span set:html={sparkleIcon}></span>
+                                    Ask for Substitutions
+                                </button>
                             </div>
 
                             <ul id="ingredients-list" class="ingredients-list">
@@ -123,6 +136,22 @@ import "../styles/recipe.scss";
                                 id="instructions-list"
                                 class="instructions-list"
                             >
+                            </div>
+                            <div
+                                id="recipe-notes-section"
+                                class="notes-section"
+                                style="display: none; margin-top: var(--spacing-xl); padding-top: var(--spacing-md); border-top: 1px dashed var(--color-border);"
+                            >
+                                <h2
+                                    style="font-size: 1.5rem; margin-bottom: var(--spacing-sm);"
+                                >
+                                    Recipe Notes
+                                </h2>
+                                <ol
+                                    id="recipe-notes-list"
+                                    style="padding-left: 1.5rem; color: var(--color-text-muted); font-size: 1rem; line-height: 1.6;"
+                                >
+                                </ol>
                             </div>
                         </section>
                     </div>
@@ -178,6 +207,7 @@ import "../styles/recipe.scss";
         </div>
 
         <script>
+            import feather from "feather-icons";
             import { getRecipe, saveRecipeLocally } from "../utils/db";
             import {
                 convertVolumeToWeight,
@@ -629,15 +659,26 @@ import "../styles/recipe.scss";
             function renderTags() {
                 const metaEl = document.getElementById("recipe-meta");
                 if (metaEl && currentRecipe) {
+                    const safeIcon = (
+                        name: string,
+                        opts = { width: 14, height: 14 }
+                    ) => (feather.icons[name] as any)?.toSvg(opts) || "";
+
                     const metaHtml = [
                         currentRecipe.totalTimeMinutes
-                            ? `⏱ ${currentRecipe.totalTimeMinutes}m`
+                            ? `<span class="meta-item">${safeIcon("clock")} ${
+                                  currentRecipe.totalTimeMinutes
+                              }m</span>`
                             : null,
                         currentRecipe.servings
-                            ? `🍽 ${currentRecipe.servings} servings`
+                            ? `<span class="meta-item">${safeIcon("users")} ${
+                                  currentRecipe.servings
+                              } servings</span>`
                             : null,
                         currentRecipe.yield
-                            ? `📦 Yield: ${currentRecipe.yield}`
+                            ? `<span class="meta-item">${safeIcon("package")} ${
+                                  currentRecipe.yield
+                              }</span>`
                             : null,
                     ].filter(Boolean);
 
@@ -707,9 +748,9 @@ import "../styles/recipe.scss";
                 renderTags();
 
                 if (isFirstRender) {
-                    const unitSelect = document.getElementById(
-                        "unit-system-select"
-                    ) as HTMLSelectElement;
+                    const unitLabel = document.getElementById(
+                        "unit-system-select-label"
+                    );
                     // Determine initial unit system by scanning original ingredients
                     let metricCount = 0;
                     let usCount = 0;
@@ -742,12 +783,31 @@ import "../styles/recipe.scss";
                             }
                         });
                     }
+                    const updateActiveDropdownItem = (val: string) => {
+                        const menu = document.getElementById(
+                            "unit-system-select-menu"
+                        );
+                        if (menu) {
+                            menu.querySelectorAll(".dropdown-item").forEach(
+                                (i) => {
+                                    if (i.getAttribute("data-value") === val) {
+                                        i.classList.add("active");
+                                    } else {
+                                        i.classList.remove("active");
+                                    }
+                                }
+                            );
+                        }
+                    };
+
                     if (metricCount > usCount) {
                         currentUnitSystem = "metric";
-                        if (unitSelect) unitSelect.value = "metric";
+                        if (unitLabel) unitLabel.textContent = "Metric (Grams)";
+                        updateActiveDropdownItem("metric");
                     } else {
                         currentUnitSystem = "us";
-                        if (unitSelect) unitSelect.value = "us";
+                        if (unitLabel) unitLabel.textContent = "US (Volume)";
+                        updateActiveDropdownItem("us");
                     }
                     isFirstRender = false;
                 }
@@ -782,13 +842,11 @@ import "../styles/recipe.scss";
                     }
                 }
 
-                const unitSelect = document.getElementById(
-                    "unit-system-select"
-                ) as HTMLSelectElement;
-                if (unitSelect && !unitSelect.dataset.listenerAttached) {
-                    unitSelect.addEventListener("change", (e) => {
-                        currentUnitSystem = (e.target as HTMLSelectElement)
-                            .value;
+                const unitDropdown =
+                    document.getElementById("unit-system-select");
+                if (unitDropdown && !unitDropdown.dataset.listenerAttached) {
+                    unitDropdown.addEventListener("change", (e: any) => {
+                        currentUnitSystem = e.detail.value;
                         const cbInput = document.getElementById(
                             "batch-input"
                         ) as HTMLInputElement;
@@ -800,7 +858,7 @@ import "../styles/recipe.scss";
                             isNaN(mult) ? 1 : mult
                         );
                     });
-                    unitSelect.dataset.listenerAttached = "true";
+                    unitDropdown.dataset.listenerAttached = "true";
                 }
 
                 renderIngredients(recipe, currentMultiplier);
@@ -831,6 +889,29 @@ import "../styles/recipe.scss";
                   `;
                         instructionsList.appendChild(div);
                     });
+                }
+
+                // Recipe Notes
+                const notesSection = document.getElementById(
+                    "recipe-notes-section"
+                );
+                const notesList = document.getElementById("recipe-notes-list");
+                if (notesSection && notesList) {
+                    notesList.innerHTML = "";
+                    if (recipe.notes && recipe.notes.length > 0) {
+                        recipe.notes.forEach(
+                            (noteText: string, idx: number) => {
+                                const li = document.createElement("li");
+                                li.id = `recipe-note-${idx + 1}`;
+                                li.textContent = noteText;
+                                li.style.marginBottom = "8px";
+                                notesList.appendChild(li);
+                            }
+                        );
+                        notesSection.style.display = "block";
+                    } else {
+                        notesSection.style.display = "none";
+                    }
                 }
             }
 
@@ -867,48 +948,75 @@ import "../styles/recipe.scss";
                     const li = document.createElement("li");
                     let text = "";
 
-                    if (ing.quantity !== null && ing.quantity !== undefined) {
-                        const scaled = ing.quantity * multiplier;
+                    // Resolve base quantity to use
+                    let resolvedAmount: number | null = null;
+                    let resolvedUnit: string | null = null;
+                    let amountWasConverted = false;
 
-                        let displayQuantity: number | string = scaled;
-                        let displayUnit = ing.unit;
-
-                        if (currentUnitSystem === "metric" && displayUnit) {
+                    if (currentUnitSystem === "metric") {
+                        if (
+                            ing.metric_amount !== null &&
+                            ing.metric_amount !== undefined
+                        ) {
+                            resolvedAmount = ing.metric_amount;
+                            resolvedUnit = ing.metric_unit;
+                        } else if (
+                            ing.us_amount !== null &&
+                            ing.us_amount !== undefined
+                        ) {
+                            // Fallback to local conversion if only US was provided
                             const conversion = convertVolumeToWeight(
                                 ing.item,
-                                scaled,
-                                displayUnit
+                                ing.us_amount,
+                                ing.us_unit
                             );
                             if (conversion) {
-                                displayQuantity = conversion.quantity;
-                                displayUnit = conversion.unit;
-                                displayQuantity = formatQuantity(
-                                    displayQuantity as number
-                                );
+                                resolvedAmount = conversion.quantity as number;
+                                resolvedUnit = conversion.unit;
+                                amountWasConverted = true;
                             } else {
-                                const formattedUS = formatUSVolume(
-                                    scaled,
-                                    displayUnit
-                                );
-                                displayQuantity = formattedUS.displayQuantity;
-                                displayUnit = formattedUS.displayUnit;
+                                resolvedAmount = ing.us_amount;
+                                resolvedUnit = ing.us_unit;
                             }
-                        } else if (currentUnitSystem === "us") {
+                        }
+                    } else {
+                        // US parsing
+                        if (
+                            ing.us_amount !== null &&
+                            ing.us_amount !== undefined
+                        ) {
+                            resolvedAmount = ing.us_amount;
+                            resolvedUnit = ing.us_unit;
+                        } else if (
+                            ing.metric_amount !== null &&
+                            ing.metric_amount !== undefined
+                        ) {
+                            resolvedAmount = ing.metric_amount;
+                            resolvedUnit = ing.metric_unit;
+                        }
+                    }
+
+                    if (
+                        resolvedAmount !== null &&
+                        resolvedAmount !== undefined
+                    ) {
+                        const scaled = resolvedAmount * multiplier;
+                        let displayQuantity: string | number = scaled;
+                        let displayUnit = resolvedUnit;
+
+                        // Only apply fraction formatting to US volumes or unknown/unconverted amounts roughly resembling US
+                        if (!amountWasConverted && currentUnitSystem === "us") {
                             const formattedUS = formatUSVolume(
                                 scaled,
                                 displayUnit
                             );
                             displayQuantity = formattedUS.displayQuantity;
                             displayUnit = formattedUS.displayUnit;
-                        } else {
-                            // Fallback (e.g., metric selected but no density found)
-                            // We still want to show fractions for US volume units if we can
-                            const formattedUS = formatUSVolume(
-                                scaled,
-                                displayUnit
-                            );
-                            displayQuantity = formattedUS.displayQuantity;
-                            displayUnit = formattedUS.displayUnit;
+                        } else if (
+                            amountWasConverted ||
+                            currentUnitSystem === "metric"
+                        ) {
+                            displayQuantity = formatQuantity(scaled);
                         }
 
                         text = `${displayQuantity}`;
@@ -919,6 +1027,16 @@ import "../styles/recipe.scss";
                         text = ing.rawText || ing.item;
                     }
 
+                    // Append note references as superscripts to the text
+                    if (ing.note_references && ing.note_references.length > 0) {
+                        const refs = ing.note_references
+                            .map(
+                                (n: number) =>
+                                    `<a href="#recipe-note-${n}" style="color: var(--color-accent); text-decoration: none; font-size: 0.8em;">Note ${n}</a>`
+                            )
+                            .join(", ");
+                        text += ` <sup>${refs}</sup>`;
+                    }
                     if (
                         ing.substituted &&
                         typeof ing.substituted === "object"
@@ -982,7 +1100,12 @@ import "../styles/recipe.scss";
                                         <span>${ing.substituted}</span>
                                         <button class="revert-sub btn icon-btn" data-index="${idx}" title="Remove substitution" style="margin-left: 8px; font-size: 0.8em; padding: 2px 5px;">&times;</button>`;
                     } else {
-                        li.textContent = text;
+                        // Render subtext as a secondary dimmed line if present
+                        if (ing.subtext) {
+                            li.innerHTML = `<span class="ing-text">${text}</span><span class="ing-note">${ing.subtext}</span>`;
+                        } else {
+                            li.innerHTML = text; // Allow HTML for the <sup> anchor
+                        }
                     }
 
                     ingredientsList.appendChild(li);

@@ -13,7 +13,6 @@
     "test:chromium": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -t chromium -s dist"
   },
   "dependencies": {
-    "@lucide/astro": "^0.575.0",
     "@mozilla/readability": "^0.6.0",
     "@xenova/transformers": "^2.17.2",
     "astro": "^5.17.1",
@@ -21,6 +20,7 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.1.37",
+    "@types/feather-icons": "^4.29.4",
     "@types/mozilla-readability": "^0.2.1",
     "esbuild": "^0.27.3",
     "rollup-plugin-copy": "^3.5.0",

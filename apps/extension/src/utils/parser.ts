@@ -28,7 +28,14 @@ export function checkJsonLd(): ExtractionResult | null {
         for (const cls of classes) {
             const el = doc.querySelector(cls) as HTMLElement;
             if (el) {
-                return el.innerText.replace(/\s+/g, ' ').trim();
+                let text = el.innerText;
+                // Many blogs put the notes immediately after the recipe card wrapper
+                let next = el.nextElementSibling as HTMLElement;
+                while (next && text.length < 15000) {
+                    text += "\n\n" + next.innerText;
+                    next = next.nextElementSibling as HTMLElement;
+                }
+                return text.replace(/\s+/g, ' ').trim();
             }
         }
         return null;
@@ -88,7 +95,13 @@ export function extractDomTarget(): ExtractionResult | null {
         for (const cls of classes) {
             const el = doc.querySelector(cls) as HTMLElement;
             if (el) {
-                return el.innerText.replace(/\s+/g, ' ').trim();
+                let text = el.innerText;
+                let next = el.nextElementSibling as HTMLElement;
+                while (next && text.length < 15000) {
+                    text += "\n\n" + next.innerText;
+                    next = next.nextElementSibling as HTMLElement;
+                }
+                return text.replace(/\s+/g, ' ').trim();
             }
         }
         return null;
@@ -225,11 +238,15 @@ interface Recipe {
 }
 
 interface Ingredient {
-  rawText: string; // The original line text
-  quantity: number | null; // Parse the number (e.g. 1.5 for 1 1/2)
-  unit: string | null; // e.g. "cup", "tsp", "g"
-  item: string; // The core ingredient name e.g. "all-purpose flour"
-  preparation?: string; // e.g. "sifted", "chopped"
+  rawText: string; // The original line text verbatim from the source
+  us_amount: number | null; // US volume quantity if present
+  us_unit: string | null; // US volume unit if present
+  metric_amount: number | null; // Metric weight/volume if present
+  metric_unit: string | null; // Metric unit if present
+  item: string; // The primary ingredient name ONLY. NO parentheses.
+  preparation?: string; // A cooking action ONLY (e.g. "sifted", "chopped", "melted", "softened"). Omit if none.
+  subtext?: string; // Alternative ingredients or minor descriptive context.
+  note_references?: number[]; // List of note indexes (1-based) referencing the Recipe's notes array.
   group?: string; // e.g. "Cake", "Frosting", "Crust". Omit or use null if the recipe has no sections.
 }
 
@@ -243,11 +260,17 @@ Constraints:
 1. ONLY output the valid JSON object. Do not include markdown formatting like \`\`\`json.
 2. NO COMMENTS. Do NOT include any // or /* */ comments in the JSON output. JSON does not support comments.
 3. NO TRAILING COMMAS. Ensure the JSON is strictly valid.
-4. Ensure the "ingredients" array breaks down the quantity, unit, and item clearly.
-   - Example: "2 cups + 2 tbsp all purpose flour" -> quantity: 2.125, unit: "cups", item: "all purpose flour", rawText: "2 cups + ... "
-5. YOU MUST DO YOUR BEST TO EXTRACT QUANTITY AND UNIT. ONLY use null if absolutely no quantity or unit is mentioned.
+4. Ensure the JSON is strictly valid.
+5. YOU MUST DO YOUR BEST TO EXTRACT QUANTITIES AND UNITS.
 6. If a value is unknown, use null or omit optional fields. Do not make up values.
 7. EXTREMELY IMPORTANT: If the recipe has multiple components (e.g. "Cake" and "Frosting", or "Crust" and "Filling"), you MUST extract these section names and put them in the "group" field for EVERY corresponding ingredient and instruction. In JSON-LD, this sometimes looks like an ingredient that is just a label (e.g. "For the Cake"). DO NOT miss the sections.
+8. NEVER put parentheses ( ) in any field. If the source has parenthetical text like "(Note 1)", extract the intent WITHOUT the parentheses. 
+9. RECIPE NOTES: If you see "Note 1", "Note 2", etc. mentioned in ingredients:
+   a) Search the payload for the actual full text of that note (often at the bottom).
+   b) Put the full explanation string in a top-level "notes" array on the recipe object.
+   c) Add the 1-based index (e.g., [1]) to the ingredient's "note_references" array.
+10. AMOUNTS AND UNITS: If a recipe provides both US and Metric (e.g., "1 cup / 120g", "7oz / 200g"), extract BOTH into their respective us/metric fields. 
+11. The "preparation" field is ONLY for cooking actions (e.g. "sifted", "chopped", "melted").
 `;
 
     // Build the user prompt based on which extraction path was taken.
@@ -267,8 +290,8 @@ ${JSON.stringify(extractedData.jsonLd, null, 2)}
 `;
         if (extractedData.recipeText && extractedData.recipeText.length > 0) {
             userPrompt += `
-The author's schema often omits component group names (e.g. "Cake", "Frosting"). The following is the text extracted from the recipe card. 
-Extract the recipe into the specified JSON format. CRITICAL: Use the STRUCTURED RECIPE METADATA as the authoritative source for all ingredient quantities, units, and names. Use the RECIPE CARD TEXT below ONLY to infer the correct \`group\` names and assign them to the ingredients and instructions.
+The author's schema often omits component group names (e.g. "Cake", "Frosting") and full recipe notes. The following is the text extracted from the recipe card. 
+Extract the recipe into the specified JSON format. CRITICAL: Use the STRUCTURED RECIPE METADATA as the authoritative source for all ingredient quantities, units, and names. Use the RECIPE CARD TEXT below to infer the correct \`group\` names, and to extract full text for any mentioned Recipe Notes.
 
 --- RECIPE CARD TEXT START ---
 ${extractedData.recipeText}
@@ -318,10 +341,18 @@ Extract the recipe into the specified JSON format.
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
         };
-        // For our backend, we send the raw payload (jsonLd or textContent)
-        const payload = extractedData.source === "json-ld"
-            ? JSON.stringify(extractedData.jsonLd)
-            : (extractedData.source === "dom-target" ? extractedData.recipeText : (extractedData as any).textContent);
+        // For our backend, we send the combined payload
+        let payload = "";
+        if (extractedData.source === "json-ld") {
+            payload = `--- STRUCTURED METADATA ---\n${JSON.stringify(extractedData.jsonLd, null, 2)}\n`;
+            if (extractedData.recipeText) {
+                payload += `\n--- PAGE TEXT REFERENCE ---\n${extractedData.recipeText}`;
+            }
+        } else if (extractedData.source === "dom-target") {
+            payload = extractedData.recipeText;
+        } else {
+            payload = (extractedData as any).textContent;
+        }
 
         fetchBody = { payload };
 
@@ -347,17 +378,38 @@ Extract the recipe into the specified JSON format.
             const recipeData: Recipe = {
                 id: Math.random().toString(36).substring(7),
                 url,
+                createdAt: Date.now(),
                 title: cloudData.recipe.title,
                 description: cloudData.recipe.description,
                 prepTimeMinutes: parseInt(cloudData.recipe.prepTime) || undefined,
                 cookTimeMinutes: parseInt(cloudData.recipe.cookTime) || undefined,
                 servings: cloudData.recipe.servings,
-                ingredients: cloudData.recipe.ingredients.map((ing: any) => ({
-                    rawText: `${ing.amount} ${ing.unit} ${ing.name}`,
-                    quantity: ing.amount,
-                    unit: ing.unit,
-                    item: ing.name
-                })),
+                notes: cloudData.recipe.notes || [],
+                ingredients: cloudData.recipe.ingredients.map((ing: any) => {
+                    // Reconstruct a plausible raw text for reference
+                    const rawTextParts = [
+                        ing.us_amount,
+                        ing.us_unit,
+                        ing.metric_amount ? `(${ing.metric_amount}` : '',
+                        ing.metric_unit ? `${ing.metric_unit})` : '',
+                        ing.name,
+                        ing.preparation ? `, ${ing.preparation}` : '',
+                        ing.subtext ? ` (${ing.subtext})` : ''
+                    ].filter(Boolean);
+
+                    return {
+                        rawText: rawTextParts.join(" ").replace(/\( /g, '(').trim(),
+                        us_amount: ing.us_amount,
+                        us_unit: ing.us_unit,
+                        metric_amount: ing.metric_amount,
+                        metric_unit: ing.metric_unit,
+                        item: ing.name,
+                        preparation: ing.preparation,
+                        subtext: ing.subtext,
+                        note_references: ing.note_references,
+                        group: ing.group
+                    };
+                }),
                 instructions: cloudData.recipe.instructions.map((text: string, idx: number) => ({
                     stepNumber: idx + 1,
                     text
@@ -458,6 +510,7 @@ Extract the recipe into the specified JSON format.
         const jsonString = jsonContent.substring(firstBrace, lastBrace + 1);
         try {
             const recipeData: Recipe = JSON.parse(jsonString);
+            recipeData.createdAt = Date.now();
             return { recipeData, payloadCharCount };
         } catch (parseError) {
             console.error("--- MALFORMED JSON START ---\n" + jsonString + "\n--- MALFORMED JSON END ---");
@@ -491,6 +544,7 @@ CRITICAL INSTRUCTIONS:
 - You must output your response as EXACTLY a valid JSON object.
 - NO MARKDOWN AT ALL. Do not wrap in \`\`\`json ... \`\`\`.
 - Do not use markdown inside the text values.
+- DO NOT include parentheses ( ) in the "item" or "preparation" fields.
 - Adhere to the following schema for the root object:
 {
   "thoughtProcess": "A clear, concise explanation of the chemical role of the target ingredient and why the substitution works. Do not use markdown.",

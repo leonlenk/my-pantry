@@ -99,6 +99,20 @@ body {
         color: var(--color-text-muted);
         margin-bottom: var(--spacing-sm);
         font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-sm);
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            svg {
+                opacity: 0.7;
+            }
+        }
     }
 
     .tags {
@@ -323,9 +337,20 @@ body {
             color: var(--color-text);
             line-height: 1.5;
             font-size: 1.15rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
 
             &:last-child {
                 border-bottom: none;
+            }
+
+            .ing-note {
+                // Secondary context: parenthetical notes rendered cleanly
+                font-size: 0.85rem;
+                color: var(--color-text-muted);
+                font-style: italic;
+                opacity: 0.8;
             }
         }
     }

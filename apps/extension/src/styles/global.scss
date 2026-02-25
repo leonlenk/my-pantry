@@ -22,6 +22,8 @@
   /* Warm Apricot – darkened for legibility */
   --color-accent-hover: #B5805F;
 
+  --color-surface-rgb: 244, 239, 230;
+
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
@@ -46,6 +48,7 @@
     --color-text-meta: #8A7D6E;
     --color-accent: #C48E72;
     --color-accent-hover: #D59F83;
+    --color-surface-rgb: 36, 32, 28;
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   }

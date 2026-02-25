@@ -28,6 +28,7 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         saveRecipeLocally,
       } from "../utils/db";
       import type { Recipe } from "../types/recipe";
+      import feather from "feather-icons";
 
       declare const chrome: any;
 
@@ -41,12 +42,14 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
       ) as HTMLButtonElement;
       const recipeCountEl = document.getElementById("recipe-count");
       const filterLinks = document.querySelectorAll(".filter-btn");
-      const tagFilterSelect = document.getElementById(
-        "tag-filter"
-      ) as HTMLSelectElement;
+      const clearBtn = document.getElementById("clear-search");
+      const dropdownMenu = document.getElementById("tag-dropdown-menu");
+      const selectedTagEl = document.getElementById("selected-tag");
 
       let currentFilter = "all";
       let currentTagFilter = "";
+      let activeExtractions: Record<string, { status: string; title: string }> =
+        {};
 
       document.addEventListener("DOMContentLoaded", async () => {
         // Redirect to setup if not configured
@@ -75,16 +78,65 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           });
         });
 
-        tagFilterSelect?.addEventListener("change", async (e) => {
-          currentTagFilter = (e.target as HTMLSelectElement).value;
-          await loadRecipes();
-        });
-
         await loadRecipes();
+
+        // Listen for extraction updates so we can live reload
+        if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+          chrome.runtime.onMessage.addListener((message: any) => {
+            if (message.type === "EXTRACTION_STATUS_UPDATE") {
+              if (message.isComplete) {
+                if (!message.isError) {
+                  // Reload recipes when a new extraction finishes in the background
+                  loadRecipes();
+                }
+                delete activeExtractions[message.url];
+              } else {
+                let displayTitle = message.recipeTitle;
+                if (!displayTitle) {
+                  try {
+                    displayTitle = new URL(message.url).hostname.replace(
+                      "www.",
+                      ""
+                    );
+                  } catch (e) {
+                    displayTitle = "Website";
+                  }
+                }
+
+                const isNew = !activeExtractions[message.url];
+
+                activeExtractions[message.url] = {
+                  status: message.status,
+                  title: displayTitle,
+                };
+
+                if (isNew) {
+                  // Trigger a full re-render only when creating the placeholder card initially
+                  loadRecipes();
+                } else {
+                  // Update only the specific placeholder card's text to prevent layout thrashing
+                  const safeId =
+                    "placeholder-" + message.url.replace(/[^a-zA-Z0-9_-]/g, "");
+                  const placeholderEl = document.getElementById(safeId);
+
+                  if (placeholderEl) {
+                    const statusBadge =
+                      placeholderEl.querySelector(".status-badge");
+                    if (statusBadge) statusBadge.textContent = message.status;
+
+                    const titleEl =
+                      placeholderEl.querySelector(".skeleton-title");
+                    if (titleEl) titleEl.textContent = displayTitle;
+                  }
+                }
+              }
+            }
+          });
+        }
       });
 
       function populateTags(allRecipes: Recipe[]) {
-        if (!tagFilterSelect) return;
+        if (!dropdownMenu || !selectedTagEl) return;
         const allTags = new Set<string>();
         allRecipes.forEach((r) => {
           if (r.tags) {
@@ -92,22 +144,42 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           }
         });
 
-        const currentVal = tagFilterSelect.value;
+        const sortedTags = Array.from(allTags).sort();
 
-        tagFilterSelect.innerHTML = '<option value="">All Tags</option>';
-        Array.from(allTags)
-          .sort()
-          .forEach((tag) => {
-            const option = document.createElement("option");
-            option.value = tag;
-            option.textContent = tag;
-            tagFilterSelect.appendChild(option);
-          });
+        // Re-generate menu content
+        dropdownMenu.innerHTML = "";
 
-        if (currentVal && allTags.has(currentVal)) {
-          tagFilterSelect.value = currentVal;
-        } else {
+        // Add "All Tags" option
+        const allOption = document.createElement("div");
+        allOption.className = `dropdown-item ${
+          !currentTagFilter ? "active" : ""
+        }`;
+        allOption.textContent = "All Tags";
+        allOption.addEventListener("click", async () => {
           currentTagFilter = "";
+          selectedTagEl.textContent = "All Tags";
+          await loadRecipes();
+        });
+        dropdownMenu.appendChild(allOption);
+
+        sortedTags.forEach((tag) => {
+          const option = document.createElement("div");
+          option.className = `dropdown-item ${
+            currentTagFilter === tag ? "active" : ""
+          }`;
+          option.textContent = tag;
+          option.addEventListener("click", async () => {
+            currentTagFilter = tag;
+            selectedTagEl.textContent = tag;
+            await loadRecipes();
+          });
+          dropdownMenu.appendChild(option);
+        });
+
+        // Ensure current filter label is correct
+        if (currentTagFilter && !allTags.has(currentTagFilter)) {
+          currentTagFilter = "";
+          selectedTagEl.textContent = "All Tags";
         }
       }
 
@@ -117,9 +189,24 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         // Populate tags before applying any filters so all tags are available
         populateTags(recipes);
 
-        if (currentFilter === "recent") {
-          recipes = recipes.reverse();
-        } else if (currentFilter === "favorites") {
+        // Apply default sort based on the current filter
+        recipes.sort((a, b) => {
+          if (currentFilter === "all" || currentFilter === "favorites") {
+            // Rule 1: Favorites first
+            if (a.isFavorite && !b.isFavorite) return -1;
+            if (!a.isFavorite && b.isFavorite) return 1;
+
+            // Rule 2: Alphabetical tie-breaker (A-Z)
+            return a.title.localeCompare(b.title);
+          }
+
+          // Pure chronological for "Recent" or other views (newest to oldest)
+          const aTime = a.createdAt || 0;
+          const bTime = b.createdAt || 0;
+          return bTime - aTime;
+        });
+
+        if (currentFilter === "favorites") {
           recipes = recipes.filter((r) => r.isFavorite);
         }
 
@@ -133,14 +220,44 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           recipeCountEl.textContent = `${recipes.length} recipe${
             recipes.length !== 1 ? "s" : ""
           }`;
-        renderRecipes(recipes);
+
+        // Wrap the DOM update in a view transition for smooth animations
+        if ((document as any).startViewTransition) {
+          (document as any).startViewTransition(() => renderRecipes(recipes));
+        } else {
+          renderRecipes(recipes);
+        }
       }
 
       function renderRecipes(recipes: Recipe[]) {
         if (!grid || !emptyState) return;
         grid.innerHTML = "";
 
-        if (recipes.length === 0) {
+        // Render active extraction placeholders first
+        Object.entries(activeExtractions).forEach(([url, data], index) => {
+          const placeholder = document.createElement("div");
+          const safeId = "placeholder-" + url.replace(/[^a-zA-Z0-9_-]/g, "");
+          placeholder.id = safeId;
+          placeholder.className = "card recipe-card skeleton";
+          (
+            placeholder.style as any
+          ).viewTransitionName = `placeholder-view-${index}`;
+          placeholder.innerHTML = `
+            <div class="card-header">
+              <h3 class="skeleton-title" style="overflow-wrap: anywhere; opacity: 0.8; margin-bottom: 0; background: none; animation: none;">${data.title}</h3>
+            </div>
+            <div class="skeleton-meta"></div>
+            <div class="skeleton-text"></div>
+            <div class="skeleton-text"></div>
+            <div class="status-badge">${data.status}</div>
+          `;
+          grid.appendChild(placeholder);
+        });
+
+        if (
+          recipes.length === 0 &&
+          Object.keys(activeExtractions).length === 0
+        ) {
           grid.classList.add("hidden");
           emptyState.classList.remove("hidden");
           return;
@@ -152,7 +269,16 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         recipes.forEach((recipe: Recipe, index: number) => {
           const card = document.createElement("div");
           card.className = "card recipe-card";
+
+          const isNew =
+            recipe.createdAt && Date.now() - recipe.createdAt < 6000;
+          if (isNew) {
+            card.classList.add("highlight-new");
+          }
+
+          // Disable individual entry animation if we're doing a view transition to avoid double-animation
           card.style.animationDelay = `${index * 0.05}s`;
+          (card.style as any).viewTransitionName = `card-${recipe.id}`;
 
           const tagsHtml = recipe.tags
             ? recipe.tags
@@ -160,31 +286,59 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
                 .join("")
             : "";
 
+          const safeIcon = (name: string, opts: object) => {
+            // Guard: feather-icons will throw if the icon name doesn't exist
+            return (feather.icons[name] as any)?.toSvg(opts) ?? "";
+          };
+
           const metaHtml = [
-            recipe.totalTimeMinutes ? `⏱ ${recipe.totalTimeMinutes}m` : null,
-            recipe.servings ? `🍽 ${recipe.servings} servings` : null,
-            recipe.yield ? `📦 ${recipe.yield}` : null,
+            recipe.totalTimeMinutes
+              ? `<span class="meta-item">${safeIcon("clock", {
+                  width: 14,
+                  height: 14,
+                })} ${recipe.totalTimeMinutes}m</span>`
+              : null,
+            recipe.servings
+              ? `<span class="meta-item">${safeIcon("users", {
+                  width: 14,
+                  height: 14,
+                })} ${recipe.servings} servings</span>`
+              : null,
+            recipe.yield
+              ? `<span class="meta-item">${safeIcon("package", {
+                  width: 14,
+                  height: 14,
+                })} ${recipe.yield}</span>`
+              : null,
           ]
             .filter(Boolean)
-            .join(" &nbsp;·&nbsp; ");
+            .join('<span class="dot">·</span>');
 
           const description = (recipe.description || "").slice(0, 140);
+
+          const starIcon = recipe.isFavorite
+            ? safeIcon("star", { width: 18, height: 18, fill: "currentColor" })
+            : safeIcon("star", { width: 18, height: 18 });
+
+          const deleteIcon = safeIcon("x", { width: 18, height: 18 });
 
           card.innerHTML = `
           <div class="card-header">
             <h3>${recipe.title}</h3>
             <div class="card-actions">
-              <button class="favorite-btn" data-id="${
-                recipe.id
-              }" title="Toggle favorite">
-                ${recipe.isFavorite ? "★" : "☆"}
+              <button class="favorite-btn ${
+                recipe.isFavorite ? "is-favorite" : ""
+              }" data-id="${recipe.id}" title="Toggle favorite">
+                ${starIcon}
               </button>
               <button class="delete-btn" data-id="${
                 recipe.id
-              }" title="Delete recipe">✕</button>
+              }" title="Delete recipe">
+                ${deleteIcon}
+              </button>
             </div>
           </div>
-          ${metaHtml ? `<p class="meta">${metaHtml}</p>` : ""}
+          ${metaHtml ? `<div class="meta">${metaHtml}</div>` : ""}
           <p class="desc">${description}${
             (recipe.description || "").length > 140 ? "..." : ""
           }</p>
@@ -213,22 +367,20 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
               recipe.isFavorite = !recipe.isFavorite;
 
               // Immediately update UI before db op
-              (e.currentTarget as HTMLButtonElement).textContent =
-                recipe.isFavorite ? "★" : "☆";
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.classList.toggle("is-favorite", recipe.isFavorite);
+              btn.innerHTML = recipe.isFavorite
+                ? safeIcon("star", {
+                    width: 18,
+                    height: 18,
+                    fill: "currentColor",
+                  })
+                : safeIcon("star", { width: 18, height: 18 });
 
               await saveRecipeLocally(recipe);
-              if (currentFilter === "favorites" && !recipe.isFavorite) {
-                card.remove();
-                const remaining = grid.querySelectorAll(".recipe-card").length;
-                if (recipeCountEl)
-                  recipeCountEl.textContent = `${remaining} recipe${
-                    remaining !== 1 ? "s" : ""
-                  }`;
-                if (remaining === 0) {
-                  grid.classList.add("hidden");
-                  emptyState.classList.remove("hidden");
-                }
-              }
+
+              // Re-load and re-sort EVERYTHING immediately so the card jumps to its new position
+              await loadRecipes();
             });
 
           card
@@ -307,9 +459,21 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         if (e.key === "Enter") handleSearch();
       });
 
-      // Reset to all recipes when search is cleared
+      clearBtn?.addEventListener("click", async () => {
+        if (searchInput) {
+          searchInput.value = "";
+          clearBtn.classList.remove("show");
+          await loadRecipes();
+        }
+      });
+
       searchInput?.addEventListener("input", async () => {
-        if (searchInput.value === "") await loadRecipes();
+        if (searchInput.value.trim().length > 0) {
+          clearBtn?.classList.add("show");
+        } else {
+          clearBtn?.classList.remove("show");
+          await loadRecipes();
+        }
       });
     </script>
   </body>

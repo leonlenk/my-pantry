@@ -44,6 +44,12 @@ import MainView from "../components/popup/MainView.astro";
               chrome.tabs.create({ url: chrome.runtime.getURL("setup.html") });
             } else {
               mainView?.classList.remove("hidden");
+
+              const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+              const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+              if (supabaseUrl && supabaseAnonKey) {
+                chrome.storage.local.set({ supabaseUrl, supabaseAnonKey });
+              }
             }
           }
         } catch (e) {

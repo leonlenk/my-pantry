@@ -84,6 +84,8 @@ btnOauth?.addEventListener("click", () => {
                 await chrome.storage.local.set({
                     supabaseToken: accessToken,
                     supabaseRefreshToken: refreshToken,
+                    supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL,
+                    supabaseAnonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
                     llmProvider: "google",
                     llmModel: "gemini-2.5-flash",
                     plaintextApiKey: null,

@@ -6,6 +6,7 @@ export interface Recipe {
     author?: string;
     image?: string; // URL to the main recipe image
     isFavorite?: boolean;
+    createdAt?: number; // Unix timestamp
 
     prepTimeMinutes?: number;
     cookTimeMinutes?: number;
@@ -16,6 +17,7 @@ export interface Recipe {
 
     ingredients: Ingredient[];
     instructions: InstructionStep[];
+    notes?: string[]; // Recipe-level string notes (extracted from bottom of page)
 
     tags?: string[];
 
@@ -33,11 +35,16 @@ export interface Ingredient {
     // The original text from the DOM for reference (e.g., "1 1/2 cups all-purpose flour, sifted")
     rawText: string;
 
-    // Parsed fields critical for the Substitution Loop
-    quantity: number | null; // e.g., 1.5
-    unit: string | null;     // e.g., "cups", "tbsp", "grams"
+    // Explicit unit and quantity splits
+    us_amount: number | null;
+    us_unit: string | null;
+    metric_amount: number | null;
+    metric_unit: string | null;
+
     item: string;            // e.g., "all-purpose flour"
-    preparation?: string;    // e.g., "sifted", "chopped"
+    preparation?: string;    // Cooking action only — e.g., "sifted", "chopped", "melted"
+    subtext?: string;        // Alternative context — e.g., "or graham crackers"
+    note_references?: number[]; // Indexes referencing the Recipe.notes array
     group?: string;          // Optional section name (e.g., "Cake", "Frosting")
     substituted?: {
         quantity?: number;
