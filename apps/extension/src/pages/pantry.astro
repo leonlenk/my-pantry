@@ -46,8 +46,8 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
       const dropdownMenu = document.getElementById("tag-dropdown-menu");
       const selectedTagEl = document.getElementById("selected-tag");
 
-      let currentFilter = "all";
-      let currentTagFilter = "";
+      let currentFilter = localStorage.getItem("pantryFilter") || "all";
+      let currentTagFilter = localStorage.getItem("pantryTagFilter") || "";
       let activeExtractions: Record<string, { status: string; title: string }> =
         {};
 
@@ -67,6 +67,16 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           }
         }
 
+        // Initialize active filter link
+        if (filterLinks.length > 0) {
+          filterLinks.forEach((l) => l.classList.remove("active"));
+          const activeLink =
+            Array.from(filterLinks).find(
+              (l) => (l as HTMLElement).dataset.filter === currentFilter
+            ) || filterLinks[0];
+          activeLink.classList.add("active");
+        }
+
         filterLinks.forEach((link) => {
           link.addEventListener("click", async (e) => {
             e.preventDefault();
@@ -74,6 +84,7 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
             (e.currentTarget as HTMLElement).classList.add("active");
             currentFilter =
               (e.currentTarget as HTMLElement).dataset.filter || "all";
+            localStorage.setItem("pantryFilter", currentFilter);
             await loadRecipes();
           });
         });
@@ -85,11 +96,48 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           chrome.runtime.onMessage.addListener((message: any) => {
             if (message.type === "EXTRACTION_STATUS_UPDATE") {
               if (message.isComplete) {
-                if (!message.isError) {
-                  // Reload recipes when a new extraction finishes in the background
+                if (message.isError) {
+                  // Show error on the placeholder card, then remove it after a delay
+                  const safeId =
+                    "placeholder-" + message.url.replace(/[^a-zA-Z0-9_-]/g, "");
+                  const placeholderEl = document.getElementById(safeId);
+
+                  if (placeholderEl) {
+                    // Stamp the error state onto the visible card
+                    placeholderEl.classList.add("skeleton-error");
+                    const statusBadge =
+                      placeholderEl.querySelector(".status-badge");
+                    if (statusBadge) statusBadge.textContent = message.status;
+                    const titleEl =
+                      placeholderEl.querySelector(".skeleton-title");
+                    if (titleEl) (titleEl as HTMLElement).style.opacity = "1";
+
+                    // Wait 3 s so the user can read the error, then fade out and remove
+                    setTimeout(() => {
+                      placeholderEl.classList.add("skeleton-fade-out");
+                      placeholderEl.addEventListener(
+                        "animationend",
+                        () => {
+                          placeholderEl.remove();
+                          // If grid is now empty, show the empty state
+                          const remaining =
+                            grid?.querySelectorAll(".recipe-card").length ?? 0;
+                          if (remaining === 0) {
+                            grid?.classList.add("hidden");
+                            emptyState?.classList.remove("hidden");
+                          }
+                        },
+                        { once: true }
+                      );
+                    }, 3000);
+                  }
+
+                  delete activeExtractions[message.url];
+                } else {
+                  // Reload recipes when a new extraction finishes successfully
                   loadRecipes();
+                  delete activeExtractions[message.url];
                 }
-                delete activeExtractions[message.url];
               } else {
                 let displayTitle = message.recipeTitle;
                 if (!displayTitle) {
@@ -157,6 +205,7 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         allOption.textContent = "All Tags";
         allOption.addEventListener("click", async () => {
           currentTagFilter = "";
+          localStorage.removeItem("pantryTagFilter");
           selectedTagEl.textContent = "All Tags";
           await loadRecipes();
         });
@@ -170,6 +219,7 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
           option.textContent = tag;
           option.addEventListener("click", async () => {
             currentTagFilter = tag;
+            localStorage.setItem("pantryTagFilter", tag);
             selectedTagEl.textContent = tag;
             await loadRecipes();
           });
@@ -179,7 +229,10 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         // Ensure current filter label is correct
         if (currentTagFilter && !allTags.has(currentTagFilter)) {
           currentTagFilter = "";
+          localStorage.removeItem("pantryTagFilter");
           selectedTagEl.textContent = "All Tags";
+        } else if (currentTagFilter && allTags.has(currentTagFilter)) {
+          selectedTagEl.textContent = currentTagFilter;
         }
       }
 

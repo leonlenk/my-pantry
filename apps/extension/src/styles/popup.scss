@@ -25,38 +25,47 @@ body {
     }
 
     .status-viewport {
-        height: 5rem;
-        overflow-y: hidden;
-        scroll-behavior: smooth;
-        position: relative;
-        /* create a fade effect at top and bottom */
-        -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
-        mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
-
-        /* So scrolling doesn't push the parent box */
         margin-top: var(--spacing-sm);
+        padding: var(--spacing-md) var(--spacing-sm);
+        border: 1px dashed var(--color-border);
+        border-radius: var(--radius-sm);
+        background-color: var(--color-surface);
     }
 
-    .status-scroller {
-        display: flex;
-        flex-direction: column;
-        padding: 1rem 0;
-        /* padding so first/last items can be centered */
-    }
-
-    .status-msg {
+    .status-badge {
         font-size: 0.8rem;
-        color: var(--color-primary);
-        margin: 0.25rem 0;
-        text-align: center;
-        opacity: 0.4;
-        transition: opacity 0.3s ease, font-weight 0.3s ease;
-        min-height: 1.2rem;
-    }
+        color: var(--color-accent);
+        font-weight: 600;
+        font-style: italic;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
 
-    .status-msg.active {
-        opacity: 1;
-        font-weight: bold;
+        &::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            background-color: var(--color-accent);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1s infinite alternate;
+        }
+
+        &.error {
+            color: #ef4444;
+
+            &::before {
+                background-color: #ef4444;
+                animation: none;
+            }
+        }
+
+        &.done {
+            &::before {
+                animation: none;
+            }
+        }
     }
 }
 

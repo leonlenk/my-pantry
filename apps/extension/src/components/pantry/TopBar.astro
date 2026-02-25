@@ -11,12 +11,22 @@ const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
         <!-- LEFT: Primary filters -->
         <div class="left-section">
             <nav class="filters">
-                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="recent">Recent</button>
                 <button class="filter-btn" data-filter="favorites"
                     >Favorites</button
                 >
             </nav>
+            <script is:inline>
+                (function () {
+                    const current =
+                        localStorage.getItem("pantryFilter") || "all";
+                    const btn = document.querySelector(
+                        '.filters .filter-btn[data-filter="' + current + '"]'
+                    );
+                    if (btn) btn.classList.add("active");
+                })();
+            </script>
         </div>
 
         <!-- CENTER: Search bar + recipe count underneath -->
@@ -49,6 +59,15 @@ const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
                 label="All Tags"
                 placeholderId="selected-tag"
             />
+            <script is:inline>
+                (function () {
+                    const tag = localStorage.getItem("pantryTagFilter");
+                    if (tag) {
+                        const el = document.getElementById("selected-tag");
+                        if (el) el.textContent = tag;
+                    }
+                })();
+            </script>
         </div>
     </div>
 </header>

@@ -114,8 +114,9 @@ async function refreshSupabaseToken(): Promise<string | null> {
     console.log("[Auth] Token is missing or expiring soon. Attempting refresh...");
 
     if (!supabaseAnonKey) {
-        console.error("[Auth] Missing Supabase Anon Key. Cannot refresh token.");
-        return null;
+        // Anon key missing from storage — could happen for users who installed before it was persisted.
+        // Throw a clear error so the user sees a helpful message rather than a cryptic crash.
+        throw new Error("Session expired. Please sign out and sign in again to refresh your credentials.");
     }
 
     try {

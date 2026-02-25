@@ -85,56 +85,52 @@ import MainView from "../components/popup/MainView.astro";
 
       // Status UI Elements
       const statusViewport = document.getElementById("status-viewport");
-      const statusScroller = document.getElementById("status-scroller");
+      const statusBadge = document.getElementById("status-badge");
+      const safeToCloseMsg = document.getElementById("safe-to-close-msg");
       const errorContainer = document.getElementById("error-container");
-      const errorExpandBtn = document.getElementById("error-expand-btn");
       const errorDetails = document.getElementById("error-details");
 
-      function addStatusMessage(text: string, isError: boolean = false) {
-        if (!statusViewport || !statusScroller) return;
+      function addStatusMessage(
+        text: string,
+        isError: boolean = false,
+        isComplete: boolean = false
+      ) {
+        if (!statusViewport || !statusBadge) return;
 
         statusViewport.classList.remove("hidden");
+        statusBadge.textContent = isError ? "Extraction failed" : text;
 
-        const active = statusScroller.querySelectorAll(".active");
-        active.forEach((el) => el.classList.remove("active"));
+        statusBadge.classList.remove("error", "done");
+        if (isError) {
+          statusBadge.classList.add("error");
+        } else if (isComplete) {
+          statusBadge.classList.add("done");
+        }
 
-        const p = document.createElement("p");
-        p.className = "status-msg active";
-        p.textContent = isError ? "Extraction failed" : text;
-        if (isError) p.style.color = "#ef4444";
-
-        statusScroller.appendChild(p);
-
-        // Scroll to bottom
-        setTimeout(() => {
-          statusViewport.scrollTo({
-            top: statusScroller.scrollHeight,
-            behavior: "smooth",
-          });
-        }, 50);
+        if (safeToCloseMsg) {
+          if (
+            !isError &&
+            !isComplete &&
+            (text.includes("Asking") || text.includes("tokens"))
+          ) {
+            safeToCloseMsg.classList.remove("hidden");
+          } else if (isError || isComplete) {
+            safeToCloseMsg.classList.add("hidden");
+          } else if (
+            text.includes("Starting") ||
+            text.includes("Initializing")
+          ) {
+            safeToCloseMsg.classList.add("hidden");
+          }
+        }
 
         if (isError && errorContainer && errorDetails) {
           errorContainer.classList.remove("hidden");
-          errorDetails.classList.add("hidden");
-          if (errorExpandBtn) errorExpandBtn.textContent = "Show Details";
           errorDetails.textContent = text;
         } else if (!isError && errorContainer) {
           errorContainer.classList.add("hidden");
         }
       }
-
-      errorExpandBtn?.addEventListener("click", () => {
-        if (errorDetails) {
-          errorDetails.classList.toggle("hidden");
-          if (errorExpandBtn) {
-            errorExpandBtn.textContent = errorDetails.classList.contains(
-              "hidden"
-            )
-              ? "Show Details"
-              : "Hide Details";
-          }
-        }
-      });
 
       openPantryBtn?.addEventListener("click", () => {
         if (typeof chrome !== "undefined" && chrome.tabs) {
@@ -259,11 +255,10 @@ import MainView from "../components/popup/MainView.astro";
       });
 
       // Listen for background updates
-      // Listen for background updates
       chrome.runtime.onMessage.addListener((message) => {
         if (message.type === "EXTRACTION_STATUS_UPDATE") {
           const { status, isError, isComplete } = message;
-          addStatusMessage(status, isError);
+          addStatusMessage(status, isError, isComplete);
 
           if (isError && confirmExtractBtn) {
             (confirmExtractBtn as HTMLButtonElement).disabled = false;

@@ -156,6 +156,12 @@ export function extractWithReadability(): ExtractionResult {
     }
 
     function pruneDocumentForReadability(docClone: Document): void {
+        // Kill-list: strip noisy/irrelevant tags before Readability parses the DOM.
+        // These tags add token bloat without contributing recipe content.
+        docClone
+            .querySelectorAll("script, style, noscript, iframe, nav")
+            .forEach((el) => el.remove());
+
         docClone
             .querySelectorAll("img, picture, figure > img, svg, canvas, video, audio")
             .forEach((el) => el.remove());
@@ -271,6 +277,7 @@ Constraints:
    c) Add the 1-based index (e.g., [1]) to the ingredient's "note_references" array.
 10. AMOUNTS AND UNITS: If a recipe provides both US and Metric (e.g., "1 cup / 120g", "7oz / 200g"), extract BOTH into their respective us/metric fields. 
 11. The "preparation" field is ONLY for cooking actions (e.g. "sifted", "chopped", "melted").
+12. IF NO RECIPE IS FOUND ON THE PAGE, YOU MUST OUTPUT EXACTLY: { "error": "No recipe found on this page." }
 `;
 
     // Build the user prompt based on which extraction path was taken.
@@ -369,10 +376,24 @@ Extract the recipe into the specified JSON format.
 
             if (!response.ok) {
                 const errText = await response.text();
+                if (response.status === 401) {
+                    throw new Error("Session expired. Please sign out and sign in again to continue.");
+                }
+                if (response.status === 413) {
+                    throw new Error(`Payload too large. The page content exceeds 13,000 characters after cleanup. Try a page with a dedicated recipe card.`);
+                }
                 throw new Error(`Cloud API Error (${response.status}): ${errText}`);
             }
 
             const cloudData = await response.json();
+
+            if (cloudData.error) {
+                throw new Error(cloudData.error);
+            }
+            if (!cloudData.recipe || !cloudData.recipe.ingredients || cloudData.recipe.ingredients.length === 0) {
+                throw new Error("No recipe found on this page.");
+            }
+
             // Map backend Recipe model to extension Recipe model
             // Backend: title, description, prepTime, cookTime, servings, ingredients (name, amount, unit), instructions (strings)
             const recipeData: Recipe = {
@@ -508,14 +529,24 @@ Extract the recipe into the specified JSON format.
         }
 
         const jsonString = jsonContent.substring(firstBrace, lastBrace + 1);
+        let parsedData: any;
         try {
-            const recipeData: Recipe = JSON.parse(jsonString);
-            recipeData.createdAt = Date.now();
-            return { recipeData, payloadCharCount };
+            parsedData = JSON.parse(jsonString);
         } catch (parseError) {
             console.error("--- MALFORMED JSON START ---\n" + jsonString + "\n--- MALFORMED JSON END ---");
             throw parseError; // Rethrow to be caught by the outer catch
         }
+
+        if (parsedData.error) {
+            throw new Error(parsedData.error);
+        }
+        if (!parsedData.ingredients || parsedData.ingredients.length === 0) {
+            throw new Error("No recipe found on this page.");
+        }
+
+        const recipeData: Recipe = parsedData;
+        recipeData.createdAt = Date.now();
+        return { recipeData, payloadCharCount };
     } catch (error) {
         console.error("Failed to parse LLM response as JSON. See the printed string above.");
         throw new Error("LLM returned malformed JSON");

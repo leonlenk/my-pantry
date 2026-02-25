@@ -36,21 +36,20 @@
             >
 
             <div id="status-viewport" class="status-viewport hidden mt">
-                <div id="status-scroller" class="status-scroller">
-                    <!-- Status messages will be appended here -->
+                <div id="status-badge" class="status-badge"></div>
+                <div
+                    id="safe-to-close-msg"
+                    class="hidden"
+                    style="margin-top: 12px; font-size: 0.75rem; color: var(--color-text-muted); text-align: center; line-height: 1.4;"
+                >
+                    You can safely close this popup and the active tab now while
+                    it finishes in the background.
                 </div>
             </div>
 
-            <div id="error-container" class="hidden mt text-center">
-                <button
-                    id="error-expand-btn"
-                    class="text-btn"
-                    style="font-size: 0.75rem; text-decoration: underline; background: none; border: none; color: var(--color-text-muted); cursor: pointer;"
-                    >Show Details</button
-                >
+            <div id="error-container" class="hidden mt">
                 <div
                     id="error-details"
-                    class="hidden"
                     style="font-size: 0.75rem; color: #ef4444; margin-top: 0.5rem; background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 4px; text-align: left; max-height: 100px; overflow-y: auto; word-break: break-all;"
                 >
                 </div>
