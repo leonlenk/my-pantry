@@ -1,5 +1,5 @@
 import type { Recipe } from "../types/recipe";
-import { syncRecipeToCloud, deleteRecipeFromCloud } from "./sync";
+import { syncRecipeToCloud, deleteRecipeFromCloud, syncBatchToCloud } from "./sync";
 import { create, insertMultiple, search } from "@orama/orama";
 
 let oramaDb: any = null;
@@ -72,6 +72,52 @@ export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
     // Fire-and-forget cloud sync — a failure here must never surface to the user.
     console.log(`[DB] Initiating cloud sync for recipe '${recipe.id}'...`);
     syncRecipeToCloud(recipe).catch((e) => console.warn("[Sync] Unexpected cloud save error:", e));
+}
+
+/**
+ * Persists a batch of recipe objects to IndexedDB
+ * and fires off a batch sync to the cloud.
+ */
+export async function importRecipesLocally(recipes: Recipe[]): Promise<void> {
+    if (!recipes || recipes.length === 0) return;
+
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+
+        // Use put to gracefully overwrite duplicates if any exist
+        recipes.forEach(recipe => store.put(recipe));
+
+        tx.oncomplete = () => {
+            resolve();
+            db.close();
+        };
+        tx.onerror = () => {
+            reject(tx.error);
+        };
+    });
+
+    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+        try {
+            const data: Record<string, any> = await chrome.storage.local.get("savedUrls");
+            const urls: Set<string> = new Set(Array.isArray(data.savedUrls) ? data.savedUrls : []);
+
+            recipes.forEach(r => {
+                if (r.url) urls.add(r.url);
+            });
+
+            await chrome.storage.local.set({ savedUrls: Array.from(urls) });
+        } catch (e) {
+            console.warn("Failed to update savedUrls cache during batch import", e);
+        }
+    }
+
+    oramaDb = null; // Invalidate cache
+
+    // Fire-and-forget cloud batch sync
+    console.log(`[DB] Initiating batch cloud sync for ${recipes.length} imported recipes...`);
+    syncBatchToCloud(recipes).catch((e) => console.warn("[Sync] Unexpected cloud batch save error:", e));
 }
 
 /**

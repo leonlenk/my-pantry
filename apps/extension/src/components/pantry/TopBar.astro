@@ -4,6 +4,10 @@ import Dropdown from "../common/Dropdown.astro";
 const searchIcon =
     feather.icons["search"]?.toSvg({ width: 18, height: 18 }) || "";
 const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
+const downloadIcon =
+    feather.icons["download"]?.toSvg({ width: 16, height: 16 }) || "";
+const uploadIcon =
+    feather.icons["upload"]?.toSvg({ width: 16, height: 16 }) || "";
 ---
 
 <header class="top-bar">
@@ -54,6 +58,22 @@ const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
 
         <!-- RIGHT: Tag Dropdown -->
         <div class="right-section">
+            <input
+                type="file"
+                id="import-file"
+                accept=".json"
+                style="display: none;"
+            />
+            <button
+                id="import-btn"
+                class="action-btn"
+                title="Import Backup"
+                set:html={uploadIcon}></button>
+            <button
+                id="export-btn"
+                class="action-btn"
+                title="Export Backup"
+                set:html={downloadIcon}></button>
             <Dropdown
                 id="tag-dropdown"
                 label="All Tags"

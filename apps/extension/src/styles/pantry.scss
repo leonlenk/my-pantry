@@ -52,6 +52,39 @@ body {
 
         .right-section {
             justify-content: flex-end;
+            align-items: center;
+            gap: var(--spacing-sm);
+
+            .action-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background-color: var(--color-surface);
+                border: 1px solid var(--color-border);
+                color: var(--color-text-muted);
+                cursor: pointer;
+                transition: all 0.2s ease;
+                padding: 0;
+                flex-shrink: 0;
+
+                &:hover {
+                    background-color: var(--color-accent);
+                    color: white;
+                    border-color: var(--color-accent);
+                }
+
+                &:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .spin-svg {
+                    animation: spinSVG 1s linear infinite;
+                }
+            }
         }
 
         .center-section {
@@ -604,5 +637,15 @@ body {
     100% {
         border-color: rgba(0, 0, 0, 0.03);
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+    }
+}
+
+@keyframes spinSVG {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
     }
 }

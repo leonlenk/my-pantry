@@ -210,14 +210,57 @@ const downloadIcon = (
                 </button>
 
                 <div id="byok-form" class="hidden mt" style="text-align: left;">
-                    <input
-                        type="password"
-                        id="input-api-key"
-                        placeholder="Enter Gemini API Key..."
-                    />
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <label
+                            for="select-provider"
+                            style="display: block; margin-bottom: 4px; font-size: 0.9rem;"
+                            >Provider</label
+                        >
+                        <select
+                            id="select-provider"
+                            style="width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background-color: var(--color-bg);"
+                        >
+                            <option value="google">Google (Gemini)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="claude">Anthropic (Claude)</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <label
+                            for="input-api-key"
+                            style="display: block; margin-bottom: 4px; font-size: 0.9rem;"
+                            >API Key</label
+                        >
+                        <input
+                            type="password"
+                            id="input-api-key"
+                            placeholder="Provider API Key..."
+                            style="width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background-color: var(--color-bg);"
+                        />
+                    </div>
+
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <label
+                            for="select-model"
+                            style="display: block; margin-bottom: 4px; font-size: 0.9rem;"
+                            >Model</label
+                        >
+                        <select
+                            id="select-model"
+                            disabled
+                            style="width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background-color: var(--color-bg);"
+                        >
+                            <option value=""
+                                >Enter API Key to load models...</option
+                            >
+                        </select>
+                    </div>
+
                     <button
                         id="btn-submit-byok"
-                        class="btn primary mt"
+                        class="btn primary"
                         style="width: 100%;">Save Key</button
                     >
                 </div>

@@ -2,7 +2,6 @@ import type { Recipe } from "../types/recipe";
 
 // Anthropic constants
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
-const MAX_TOKENS = 4096;
 
 /**
  * Discriminated union representing the result of the hybrid DOM extraction.
@@ -211,7 +210,8 @@ export async function extractRecipeWithClaude(
     extractedData: ExtractionResult,
     apiKey: string,
     model: string,
-    provider: string = "anthropic"
+    provider: string = "anthropic",
+    authMode: string = "byok"
 ): Promise<{ recipeData: Recipe, payloadCharCount: number }> {
     const { url, title } = extractedData;
 
@@ -278,6 +278,8 @@ Constraints:
 10. AMOUNTS AND UNITS: If a recipe provides both US and Metric (e.g., "1 cup / 120g", "7oz / 200g"), extract BOTH into their respective us/metric fields. 
 11. The "preparation" field is ONLY for cooking actions (e.g. "sifted", "chopped", "melted").
 12. IF NO RECIPE IS FOUND ON THE PAGE, YOU MUST OUTPUT EXACTLY: { "error": "No recipe found on this page." }
+13. EXTREMELY IMPORTANT: Keep \`rawText\` and \`instructions\` concise! DO NOT output excessively verbose descriptions.
+14. MINIFY YOUR JSON: Output the JSON exactly as a single continuous line. Do NOT use newlines, indentation, or extra spaces. This saves output tokens and prevents truncation.
 `;
 
     // Build the user prompt based on which extraction path was taken.
@@ -341,7 +343,7 @@ Extract the recipe into the specified JSON format.
     let fetchHeaders: Record<string, string> = {};
     let fetchBody: any = {};
 
-    if (provider === "google") {
+    if (authMode === "cloud") {
         // Cloud Mode: Proxy through our FastAPI backend
         fetchUrl = "http://127.0.0.1:8000/api/extract/";
         fetchHeaders = {
@@ -445,6 +447,35 @@ Extract the recipe into the specified JSON format.
         } finally {
             clearTimeout(timeoutId);
         }
+    } else if (provider === "google") {
+        fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        fetchHeaders = {
+            "Content-Type": "application/json"
+        };
+        fetchBody = {
+            contents: [
+                { parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }
+            ],
+            generationConfig: {
+                temperature: 0,
+                responseMimeType: "application/json"
+            }
+        };
+    } else if (provider === "openai") {
+        fetchUrl = "https://api.openai.com/v1/chat/completions";
+        fetchHeaders = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        };
+        fetchBody = {
+            model: model,
+            response_format: { type: "json_object" },
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ],
+            temperature: 0,
+        };
     } else if (provider === "openrouter") {
         fetchUrl = "https://openrouter.ai/api/v1/chat/completions";
         fetchHeaders = {
@@ -455,12 +486,14 @@ Extract the recipe into the specified JSON format.
         };
         fetchBody = {
             model: model,
+            response_format: { type: "json_object" },
             messages: [
                 { role: "user", content: `${systemPrompt}\n\n${userPrompt}` }
             ],
             temperature: 0,
         };
     } else {
+        const isOlderClaude = model.startsWith("claude-3-haiku") || model.startsWith("claude-3-sonnet") || model.startsWith("claude-3-opus");
         fetchUrl = CLAUDE_API_URL;
         fetchHeaders = {
             "Content-Type": "application/json",
@@ -470,7 +503,7 @@ Extract the recipe into the specified JSON format.
         };
         fetchBody = {
             model: model,
-            max_tokens: MAX_TOKENS,
+            max_tokens: isOlderClaude ? 4096 : 8192,
             system: systemPrompt,
             messages: [
                 { role: "user", content: userPrompt }
@@ -512,8 +545,10 @@ Extract the recipe into the specified JSON format.
 
     let jsonContent = "";
 
-    if (provider === "openrouter") {
+    if (provider === "openrouter" || provider === "openai") {
         jsonContent = result.choices?.[0]?.message?.content || "";
+    } else if (provider === "google") {
+        jsonContent = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } else {
         jsonContent = result.content?.[0]?.text || "";
     }
@@ -532,9 +567,12 @@ Extract the recipe into the specified JSON format.
         let parsedData: any;
         try {
             parsedData = JSON.parse(jsonString);
-        } catch (parseError) {
-            console.error("--- MALFORMED JSON START ---\n" + jsonString + "\n--- MALFORMED JSON END ---");
-            throw parseError; // Rethrow to be caught by the outer catch
+        } catch (parseError: any) {
+            console.error("--- LLM PARSE ERROR ---");
+            console.error("Error Message:", parseError.message);
+            console.error("Extracted String Length:", jsonString.length);
+            console.error("Ends with:", jsonString.substring(Math.max(0, jsonString.length - 150)));
+            throw new Error(`LLM returned malformed JSON (length ${jsonString.length}). Check console for details. Error: ${parseError.message}`);
         }
 
         if (parsedData.error) {
@@ -547,9 +585,8 @@ Extract the recipe into the specified JSON format.
         const recipeData: Recipe = parsedData;
         recipeData.createdAt = Date.now();
         return { recipeData, payloadCharCount };
-    } catch (error) {
-        console.error("Failed to parse LLM response as JSON. See the printed string above.");
-        throw new Error("LLM returned malformed JSON");
+    } catch (error: any) {
+        throw new Error(error.message || "LLM returned malformed JSON");
     }
 }
 
@@ -562,7 +599,8 @@ export async function askSubstitutionWithClaude(
     userPrompt: string,
     apiKey: string,
     model: string,
-    provider: string = "anthropic"
+    provider: string = "anthropic",
+    authMode: string = "byok"
 ): Promise<{ thoughtProcess: string; substitutions: Array<{ ingredientId: number, quantity: number | null, unit: string | null, item: string, preparation: string | null, rawText: string }> }> {
     const systemPrompt = `
 You are an expert culinary AI and food scientist.
@@ -614,7 +652,7 @@ Provide the precise JSON response.
     let fetchHeaders: Record<string, string> = {};
     let fetchBody: any = {};
 
-    if (provider === "google") {
+    if (authMode === "cloud") {
         fetchUrl = "http://127.0.0.1:8000/api/substitute/";
         fetchHeaders = {
             "Content-Type": "application/json",
@@ -676,6 +714,35 @@ Provide the precise JSON response.
         } finally {
             clearTimeout(timeoutId);
         }
+    } else if (provider === "google") {
+        fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        fetchHeaders = {
+            "Content-Type": "application/json"
+        };
+        fetchBody = {
+            contents: [
+                { parts: [{ text: `${systemPrompt}\n\n${userContent}` }] }
+            ],
+            generationConfig: {
+                temperature: 0,
+                responseMimeType: "application/json"
+            }
+        };
+    } else if (provider === "openai") {
+        fetchUrl = "https://api.openai.com/v1/chat/completions";
+        fetchHeaders = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        };
+        fetchBody = {
+            model: model,
+            response_format: { type: "json_object" },
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userContent }
+            ],
+            temperature: 0,
+        };
     } else if (provider === "openrouter") {
         fetchUrl = "https://openrouter.ai/api/v1/chat/completions";
         fetchHeaders = {
@@ -686,12 +753,14 @@ Provide the precise JSON response.
         };
         fetchBody = {
             model: model,
+            response_format: { type: "json_object" },
             messages: [
                 { role: "user", content: `${systemPrompt}\n\n${userContent}` }
             ],
             temperature: 0,
         };
     } else {
+        const isOlderClaude = model.startsWith("claude-3-haiku") || model.startsWith("claude-3-sonnet") || model.startsWith("claude-3-opus");
         fetchUrl = CLAUDE_API_URL;
         fetchHeaders = {
             "Content-Type": "application/json",
@@ -701,7 +770,7 @@ Provide the precise JSON response.
         };
         fetchBody = {
             model: model,
-            max_tokens: 1500,
+            max_tokens: isOlderClaude ? 4096 : 8192,
             system: systemPrompt,
             messages: [
                 { role: "user", content: userContent }
@@ -742,8 +811,10 @@ Provide the precise JSON response.
     }
 
     let jsonContent = "";
-    if (provider === "openrouter") {
+    if (provider === "openrouter" || provider === "openai") {
         jsonContent = result.choices?.[0]?.message?.content || "";
+    } else if (provider === "google") {
+        jsonContent = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } else {
         jsonContent = result.content?.[0]?.text || "";
     }

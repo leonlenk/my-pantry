@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     gemini_api_key: str
     extension_id: str
     max_payload_chars: int = 20_000
+    extract_weekly_limit: int = 50
+    substitute_weekly_limit: int = 50
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

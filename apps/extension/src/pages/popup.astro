@@ -176,10 +176,12 @@ import MainView from "../components/popup/MainView.astro";
               // Pass the supabaseToken as the 'apiKey' or the plaintext key
               const activeKey =
                 storageResult.supabaseToken || storageResult.plaintextApiKey;
+              const authMode = hasCloudAuth ? "cloud" : "byok";
               await executeExtraction(
                 activeKey as string,
                 llmModel as string,
-                llmProvider as string
+                llmProvider as string,
+                authMode as "cloud" | "byok"
               );
             } catch (err: any) {
               console.error("Extraction error", err);
@@ -235,7 +237,7 @@ import MainView from "../components/popup/MainView.astro";
           }
 
           const apiKey = await decryptData(encryptedApiKey, password);
-          await executeExtraction(apiKey, llmModel, llmProvider);
+          await executeExtraction(apiKey, llmModel, llmProvider, "byok");
         } catch (error: any) {
           console.error(error);
           let msg = error.message || "Unknown error";
@@ -345,7 +347,8 @@ import MainView from "../components/popup/MainView.astro";
       async function executeExtraction(
         apiKey: string,
         llmModel: string,
-        llmProvider: string
+        llmProvider: string,
+        authMode: "cloud" | "byok"
       ) {
         addStatusMessage("Initializing background extraction...");
 
@@ -371,6 +374,7 @@ import MainView from "../components/popup/MainView.astro";
           apiKey,
           llmModel,
           llmProvider,
+          authMode,
         });
 
         // Background will start sending EXTRACTION_STATUS_UPDATE messages

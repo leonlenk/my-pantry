@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from src.config import settings
 from src.dependencies.auth import verify_jwt
 from src.dependencies.rate_limit import check_rate_limit_and_telemetry
 from src.services.llm import get_substitution
@@ -16,7 +17,7 @@ class SubstituteRequest(BaseModel):
 @router.post("/")
 def substitute_endpoint(request: SubstituteRequest, user_id: str = Depends(verify_jwt)):
     """Suggests an ingredient substitution given a recipe context. Rate limited."""
-    check_rate_limit_and_telemetry(user_id=user_id, endpoint="substitute")
+    check_rate_limit_and_telemetry(user_id=user_id, endpoint="substitute", limit=settings.substitute_weekly_limit)
     
     try:
         sub = get_substitution(request.recipe_context, request.target_ingredient)

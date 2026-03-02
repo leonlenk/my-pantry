@@ -406,6 +406,7 @@ const sparkleIcon =
                             );
 
                             let apiKey = supabaseToken || plaintextApiKey;
+                            const authMode = supabaseToken ? "cloud" : "byok";
 
                             if (!apiKey) {
                                 if (encryptedApiKey) {
@@ -444,6 +445,7 @@ const sparkleIcon =
                                             llmModel ||
                                             "claude-3-5-sonnet-20241022",
                                         llmProvider: provider,
+                                        authMode,
                                     });
                                 }
                             );

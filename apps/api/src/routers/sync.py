@@ -39,6 +39,12 @@ class SaveRecipeRequest(BaseModel):
     recipe: dict[str, Any]
 
 
+class ImportRecipesRequest(BaseModel):
+    # List of Recipe objects from the client (embedding field must be excluded
+    # by the caller).
+    recipes: list[dict[str, Any]]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -71,6 +77,42 @@ def save_recipe(request: SaveRecipeRequest, user_id: str = Depends(verify_jwt)):
     except Exception as e:
         logger.error(f"[Sync] Save failed: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to save recipe: {e}")
+
+
+@router.post("/import")
+def import_recipes(request: ImportRecipesRequest, user_id: str = Depends(verify_jwt)):
+    """
+    Batch upsert recipe JSON blobs for the authenticated user.
+    """
+    if not request.recipes:
+        return {"success": True, "count": 0}
+
+    rows = []
+    for recipe in request.recipes:
+        recipe_id = recipe.get("id")
+        if not recipe_id:
+            continue
+            
+        recipe_json = {k: v for k, v in recipe.items() if k != "embedding"}
+        rows.append({
+            "id": recipe_id,
+            "user_id": user_id,
+            "recipe_json": recipe_json,
+            "updated_at": "now()",
+        })
+
+    if not rows:
+        return {"success": True, "count": 0}
+
+    try:
+        client = get_supabase_client()
+        # upsert takes a list of dicts for bulk operations
+        client.table(TABLE).upsert(rows, on_conflict="id").execute()
+        logger.info(f"[Sync] Bulk upserted {len(rows)} recipes for user {user_id}")
+        return {"success": True, "count": len(rows)}
+    except Exception as e:
+        logger.error(f"[Sync] Import failed: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to import recipes: {e}")
 
 
 @router.get("/latest")

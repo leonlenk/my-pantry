@@ -222,13 +222,13 @@ async function updateExtractionStatus(url: string, tabId: number, status: string
     }
 }
 
-async function executeExtractionInBackground(url: string, tabId: number, apiKey: string, llmModel: string, llmProvider: string) {
+async function executeExtractionInBackground(url: string, tabId: number, apiKey: string, llmModel: string, llmProvider: string, authMode: string) {
     try {
         startKeepAlive();
 
         // Proactively refresh the Supabase token before the LLM call to avoid mid-request 401s.
-        // Only relevant for the cloud/google provider that authenticates via Supabase JWTs.
-        if (llmProvider === "google") {
+        // Only relevant for the cloud mode that authenticates via Supabase JWTs.
+        if (authMode === "cloud") {
             const freshToken = await refreshSupabaseToken();
             if (freshToken) {
                 apiKey = freshToken;
@@ -238,7 +238,7 @@ async function executeExtractionInBackground(url: string, tabId: number, apiKey:
         }
 
         await updateExtractionStatus(url, tabId, "Extracting page content...");
-        console.log(`[MyPantry] Starting background extraction for ${url} (tab ${tabId}) with ${llmProvider} model: ${llmModel}`);
+        console.log(`[MyPantry] Starting background extraction for ${url} (tab ${tabId}) with ${llmProvider} model: ${llmModel} (mode: ${authMode})`);
 
         console.log("[MyPantry] Tier 1: Checking for JSON-LD schema...");
         let results = await chrome.scripting.executeScript({
@@ -321,7 +321,8 @@ async function executeExtractionInBackground(url: string, tabId: number, apiKey:
             extractedData,
             apiKey,
             llmModel,
-            llmProvider
+            llmProvider,
+            authMode
         );
 
         console.log("Successfully parsed recipe:", recipeData);
@@ -366,7 +367,7 @@ async function executeExtractionInBackground(url: string, tabId: number, apiKey:
     }
 }
 
-async function executeSubstitutionInBackground(tabId: number, recipeData: any, userPrompt: string, apiKey: string, llmModel: string, llmProvider: string) {
+async function executeSubstitutionInBackground(tabId: number, recipeData: any, userPrompt: string, apiKey: string, llmModel: string, llmProvider: string, authMode: string) {
     try {
         startKeepAlive();
 
@@ -407,7 +408,7 @@ async function executeSubstitutionInBackground(tabId: number, recipeData: any, u
 
         let result;
         try {
-            result = await askSubstitutionWithClaude(recipeData, userPrompt, apiKey, llmModel, llmProvider);
+            result = await askSubstitutionWithClaude(recipeData, userPrompt, apiKey, llmModel, llmProvider, authMode);
         } finally {
             clearInterval(statusInterval);
         }
@@ -481,10 +482,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'START_EXTRACTION') {
-        const { tabId, url, apiKey, llmModel, llmProvider } = message;
+        const { tabId, url, apiKey, llmModel, llmProvider, authMode } = message;
         const normUrl = normalizeUrl(url);
         if (!activeExtractions[normUrl]) {
-            executeExtractionInBackground(normUrl, tabId, apiKey, llmModel, llmProvider);
+            executeExtractionInBackground(normUrl, tabId, apiKey, llmModel, llmProvider, authMode);
         }
         sendResponse({ success: true, status: activeExtractions[normUrl]?.status || "Starting extraction..." });
         return true;
@@ -502,9 +503,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'ASK_SUBSTITUTION') {
-        const { tabId, recipeData, userPrompt, apiKey, llmModel, llmProvider } = message;
+        const { tabId, recipeData, userPrompt, apiKey, llmModel, llmProvider, authMode } = message;
         // Don't await this, let it run in the background
-        executeSubstitutionInBackground(tabId, recipeData, userPrompt, apiKey, llmModel, llmProvider);
+        executeSubstitutionInBackground(tabId, recipeData, userPrompt, apiKey, llmModel, llmProvider, authMode);
         sendResponse({ success: true });
         return true;
     }

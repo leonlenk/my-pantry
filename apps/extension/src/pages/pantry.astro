@@ -26,6 +26,7 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         deleteRecipe,
         searchRecipes,
         saveRecipeLocally,
+        importRecipesLocally,
       } from "../utils/db";
       import type { Recipe } from "../types/recipe";
       import feather from "feather-icons";
@@ -607,6 +608,100 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
         } else {
           clearBtn?.classList.remove("show");
           await loadRecipes();
+        }
+      });
+
+      // Export Backup
+      const exportBtn = document.getElementById("export-btn");
+      exportBtn?.addEventListener("click", async () => {
+        try {
+          const recipes = await getAllRecipes();
+          const exportRecipes = recipes.map((r) => {
+            const { embedding, ...rest } = r;
+            return rest;
+          });
+          const blob = new Blob([JSON.stringify(exportRecipes, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `mypantry_backup_${
+            new Date().toISOString().split("T")[0]
+          }.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error("Export failed:", err);
+          alert("Failed to export database.");
+        }
+      });
+
+      // Import Backup
+      const importBtn = document.getElementById(
+        "import-btn"
+      ) as HTMLButtonElement | null;
+      const importFile = document.getElementById(
+        "import-file"
+      ) as HTMLInputElement | null;
+
+      importBtn?.addEventListener("click", () => {
+        if (importFile) importFile.click();
+      });
+
+      importFile?.addEventListener("change", async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file || !importBtn) return;
+
+        const originalHtml = importBtn.innerHTML;
+        importBtn.disabled = true;
+        importBtn.innerHTML =
+          feather.icons["loader"]?.toSvg({
+            width: 16,
+            height: 16,
+            class: "spin-svg",
+          }) || "";
+
+        try {
+          const text = await file.text();
+          const recipes = JSON.parse(text);
+          if (Array.isArray(recipes)) {
+            // First we must recalculate embeddings for all of the recipes
+            // since we do not store them in the export.
+            for (const r of recipes) {
+              // Only recalculate if missing just in case they imported an old backup
+              if (!r.embedding) {
+                // Generate embedding using same string generation logic found in background worker or substitution endpoints
+                const embeddingText = `${r.title} ${r.description || ""} ${
+                  r.tags?.join(" ") || ""
+                }`;
+                const embeddingResult = await chrome.runtime.sendMessage({
+                  type: "GENERATE_EMBEDDING",
+                  text: embeddingText,
+                });
+                if (embeddingResult.success && embeddingResult.embedding) {
+                  r.embedding = embeddingResult.embedding;
+                }
+              }
+            }
+
+            await importRecipesLocally(recipes as Recipe[]);
+            await loadRecipes();
+            // Clear the input so the same file can be selected again if needed
+            importFile.value = "";
+          } else {
+            alert("Invalid backup file format. Expected an array of recipes.");
+          }
+        } catch (err) {
+          console.error("Import failed:", err);
+          alert(
+            "Failed to read backup file. Make sure it is a valid JSON file."
+          );
+        } finally {
+          importBtn.innerHTML = originalHtml;
+          importBtn.disabled = false;
         }
       });
     </script>

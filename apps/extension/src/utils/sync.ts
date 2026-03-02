@@ -96,6 +96,52 @@ export async function syncRecipeToCloud(recipe: Recipe): Promise<void> {
 }
 
 /**
+ * Upserts a batch of recipes to the cloud backend.
+ * The embeddings are explicitly excluded.
+ */
+export async function syncBatchToCloud(recipes: Recipe[]): Promise<void> {
+    console.log(`[Sync] syncBatchToCloud called for ${recipes.length} recipes`);
+    if (recipes.length === 0) return;
+
+    const token = await getAccessToken();
+    if (!token) {
+        console.log(`[Sync] No token — aborting cloud batch save.`);
+        return;
+    }
+
+    const apiBase = await getApiBase();
+    const url = `${apiBase}/api/sync/import`;
+
+    // Strip embeddings before sending
+    const recipesWithoutEmbeddings = recipes.map(r => {
+        const { embedding: _embedding, ...rest } = r;
+        return rest;
+    });
+
+    console.log(`[Sync] Batch saving ${recipes.length} recipes → POST ${url}`);
+
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ recipes: recipesWithoutEmbeddings }),
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => res.status.toString());
+            console.warn(`[Sync] Cloud batch save failed (${res.status}):`, text);
+        } else {
+            console.log(`[Sync] ${recipes.length} recipes batch-synced to cloud.`);
+        }
+    } catch (err: any) {
+        console.warn(`[Sync] Cloud batch save network error (url=${url}):`, err?.message ?? err);
+    }
+}
+
+/**
  * Deletes a recipe from the cloud backend.
  */
 export async function deleteRecipeFromCloud(recipeId: string): Promise<void> {
