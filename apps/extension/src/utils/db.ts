@@ -1,5 +1,8 @@
 import type { Recipe } from "../types/recipe";
 import { syncRecipeToCloud, deleteRecipeFromCloud } from "./sync";
+import { create, insertMultiple, search } from "@orama/orama";
+
+let oramaDb: any = null;
 
 const DB_NAME = "mypantry";
 // Bumped to 2: wipes the old `recipes` store so stale embeddings from
@@ -63,6 +66,8 @@ export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
             console.warn("Failed to update savedUrls cache", e);
         }
     }
+
+    oramaDb = null; // Invalidate cache
 
     // Fire-and-forget cloud sync — a failure here must never surface to the user.
     console.log(`[DB] Initiating cloud sync for recipe '${recipe.id}'...`);
@@ -131,12 +136,14 @@ export async function deleteRecipe(id: string): Promise<void> {
         }
     }
 
+    oramaDb = null; // Invalidate cache
+
     // Fire-and-forget cloud delete — failures are logged, never thrown.
     deleteRecipeFromCloud(id).catch((e) => console.warn("[Sync] Unexpected cloud delete error:", e));
 }
 
 /**
- * Performs an in-memory cosine similarity search across all recipes.
+ * Performs an in-memory vector search across all recipes using Orama.
  * Returns the top-k results sorted by relevance to the query embedding.
  */
 export async function searchRecipes(
@@ -146,21 +153,44 @@ export async function searchRecipes(
 ): Promise<Recipe[]> {
     const all = await getAllRecipes();
 
-    const cosine = (a: number[], b: number[]): number => {
-        let dot = 0, normA = 0, normB = 0;
-        for (let i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            normA += a[i] ** 2;
-            normB += b[i] ** 2;
-        }
-        return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-10);
-    };
+    if (!oramaDb) {
+        oramaDb = await create({
+            schema: {
+                id: "string",
+                embedding: "vector[384]",
+            },
+        });
 
-    return all
-        .filter(r => r.embedding && r.embedding.length > 0)
-        .map(r => ({ recipe: r, score: cosine(queryEmbedding, r.embedding!) }))
-        .filter(r => r.score >= minScore) // Cutoff for low similarity
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK)
-        .map(r => r.recipe);
+        const docs = all
+            .filter((r) => r.embedding && r.embedding.length === 384)
+            .map((r) => ({
+                id: r.id,
+                embedding: r.embedding,
+            }));
+
+        if (docs.length > 0) {
+            await insertMultiple(oramaDb, docs);
+        }
+    }
+
+    if (!oramaDb) return [];
+
+    const results = await search(oramaDb, {
+        mode: "vector",
+        vector: {
+            value: queryEmbedding,
+            property: "embedding",
+        },
+        similarity: minScore,
+        limit: topK,
+    });
+
+    const recipeMap = new Map<string, Recipe>();
+    for (const r of all) {
+        recipeMap.set(r.id, r);
+    }
+
+    return results.hits
+        .map((h) => recipeMap.get(h.id as string))
+        .filter((r): r is Recipe => r !== undefined);
 }
