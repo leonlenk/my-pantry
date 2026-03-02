@@ -16,13 +16,15 @@ The project is structured as a monorepo containing two main applications:
 2. **Cloud API (`/apps/api`)**: A **FastAPI** Python server managed by `uv`. It strictly acts as a secure router, rate limiter, and LLM proxy.
 
 ### Tech Stack
-- **Extension**: Astro (HTML/JS), SCSS (scoped styling), `@mozilla/readability`.
-- **Edge AI**: `Transformers.js` generating local embeddings using WASM via an `offscreen` worker.
-- **Local Storage**: `Orama` semantic search persisted to `IndexedDB`.
-- **Backend API**: FastAPI (Python), `loguru`.
-- **Database & Auth**: Supabase (Postgres with `pgvector`, Google OAuth).
-- **Rate Limiting**: Upstash (Serverless Redis) for token-bucket abuse prevention.
-- **Security Layer**: Native Web Crypto API (`PBKDF2` + `AES-GCM`) for local key encryption.
+- **Extension Framework**: Astro (HTML/JS/TS) with scoped SCSS styling and `@mozilla/readability` for DOM parsing.
+- **Extension Tooling**: Managed via `pnpm` and built for Manifest V3.
+- **Edge AI**: `Transformers.js` executing local vector generation using quantized models (like Snowflake/snowflake-arctic-embed-s int4) via WASM in a `chrome.offscreen` document.
+- **Local Database**: Semantic search is powered by `Orama`, persisted to `IndexedDB` on the client device. Vectors are stored locally, not in the cloud.
+- **Backend API**: FastAPI (Python 3.10+), managed by the `uv` package manager, and utilizing `loguru` for structured telemetry.
+- **LLM Integrations**: Directly utilizing Claude and Gemini provider APIs using Structured Outputs (no heavy abstraction frameworks).
+- **Database & Auth**: Supabase (Postgres & Google OAuth). *Note: Vectors are strictly computed and stored locally on the client-side; Supabase is solely used for cloud backup state and does not use `pgvector`.*
+- **Rate Limiting**: Upstash (Serverless Redis) for robust, token-bucket abuse prevention.
+- **Security Layer**: Native Web Crypto API (`PBKDF2` + `AES-GCM`) for fully local, encrypted API key storage.
 
 ---
 
@@ -43,7 +45,7 @@ To drastically reduce cloud overhead, **the backend never calculates embeddings*
 Users can ask for ingredient substitutions. The backend passes the active recipe context to the LLM, prompting it to analyze the chemical properties of the target ingredient (e.g., binding, leavening, moisture) and compute a mathematically adjusted substitute.
 
 ### 4. Zero-Compute Cloud Sync
-If the user authenticates via Supabase (Google OAuth), the extension pushes its pre-computed embedding vectors and JSON data to the Python API. The backend strictly routes this to Supabase `pgvector` for backup without executing any server-side AI compute.
+If the user authenticates via Supabase (Google OAuth), the extension pushes its JSON recipe backups to the Python API. The backend strictly routes this to standard Supabase Postgres for backup without executing any server-side AI compute and without needing expensive vector database instances.
 
 ---
 
@@ -52,7 +54,7 @@ If the user authenticates via Supabase (Google OAuth), the extension pushes its 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18+) & [pnpm](https://pnpm.io/)
 - [Python 3.10+](https://www.python.org/) & [uv](https://github.com/astral-sh/uv)
-- A [Supabase](https://supabase.com/) project (with `pgvector` enabled)
+- A [Supabase](https://supabase.com/) project (using standard Postgres)
 - An [Upstash Redis](https://upstash.com/) database
 - Standard API Keys to testing (Gemini, Anthropic, etc.)
 
