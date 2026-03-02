@@ -200,6 +200,19 @@ export function extractWithReadability(): ExtractionResult {
 }
 
 /**
+ * Resolves the backend API base URL from chrome.storage.local,
+ * falling back to localhost for local development.
+ * Mirrors the same pattern used in sync.ts to keep them in sync.
+ */
+async function getApiBase(): Promise<string> {
+    if (typeof chrome === "undefined" || !chrome.storage?.local) {
+        return "http://127.0.0.1:8000";
+    }
+    const data = await chrome.storage.local.get("apiUrl");
+    return (data.apiUrl as string | undefined) ?? "http://127.0.0.1:8000";
+}
+
+/**
  * Sends the extracted content to the LLM and enforces the strict Recipe JSON schema output.
  *
  * The prompt strategy adapts to the extraction source:
@@ -345,7 +358,8 @@ Extract the recipe into the specified JSON format.
 
     if (authMode === "cloud") {
         // Cloud Mode: Proxy through our FastAPI backend
-        fetchUrl = "http://127.0.0.1:8000/api/extract/";
+        const apiBase = await getApiBase();
+        fetchUrl = `${apiBase}/api/extract/`;
         fetchHeaders = {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
@@ -653,7 +667,8 @@ Provide the precise JSON response.
     let fetchBody: any = {};
 
     if (authMode === "cloud") {
-        fetchUrl = "http://127.0.0.1:8000/api/substitute/";
+        const apiBase = await getApiBase();
+        fetchUrl = `${apiBase}/api/substitute/`;
         fetchHeaders = {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,

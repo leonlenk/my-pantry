@@ -31,5 +31,5 @@ def extract_endpoint(request: ExtractRequest, user_id: str = Depends(verify_jwt)
         return {"recipe": recipe.model_dump()}
     except Exception as e:
         logger.error(f"Extraction failed: {traceback.format_exc()}")
-        # Surface the real error message — this is a private internal API so no info-disclosure risk.
-        raise HTTPException(status_code=500, detail=f"Failed to extract recipe: {e}")
+        # Only surface a generic message — internal details stay in the server logs.
+        raise HTTPException(status_code=500, detail="Failed to extract recipe. Check server logs for details.")

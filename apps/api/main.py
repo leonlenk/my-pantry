@@ -18,7 +18,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         f"chrome-extension://{settings.extension_id}",
-        "chrome-extension://gmbkgpocgmmcomccenimchgdbmofekno",
         "http://localhost",
         "http://127.0.0.1",
         "http://localhost:8000",
