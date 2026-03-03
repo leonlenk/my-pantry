@@ -1,12 +1,56 @@
 // content.ts
 // Declared content script — auto-injected by Chrome on every page.
-// Receives an "EXTRACT_PAGE" message from the background service worker,
-// runs the three-tier extraction cascade, and replies with the result.
-// By using a declared content script instead of chrome.scripting.executeScript,
-// we avoid needing the "scripting" permission and host_permissions in the manifest.
+// Two responsibilities:
+//   1. On mypantry.dev/auth/callback: capture the Supabase session from
+//      localStorage after a tab-based OAuth redirect and relay it to the
+//      background service worker (replaces the `identity` permission flow).
+//   2. On all other pages: handle EXTRACT_PAGE messages for recipe extraction.
 
 import { Readability } from "@mozilla/readability";
 import type { ExtractionResult } from "./utils/parser";
+
+// ─── Auth Session Capture ─────────────────────────────────────────────────────
+// Only active on the mypantry.dev/auth/callback page. After a successful Google
+// OAuth, Supabase redirects here and appends the session to the URL hash.
+// We parse the hash and relay the tokens to the background worker, which
+// persists them and closes this tab.
+console.log(`[PantryClip] Content script loaded on ${window.location.hostname}${window.location.pathname}`);
+if (window.location.hostname.includes('mypantry.dev') && window.location.pathname === '/auth/callback') {
+    console.log('[PantryClip] Auth callback page detected. Checking URL hash...');
+    // The hash looks like: #access_token=...&refresh_token=...&expires_in=...
+    const hash = window.location.hash;
+    console.log('[PantryClip] Raw hash:', hash ? `${hash.substring(0, 50)}...` : 'none');
+
+    if (hash && hash.includes('access_token')) {
+        try {
+            // Remove the leading '#' so URLSearchParams can parse the fragments
+            const cleanHash = hash.startsWith('#') ? hash.substring(1) : hash;
+            const params = new URLSearchParams(cleanHash);
+
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            console.log(`[PantryClip] Parsed access_token: ${accessToken ? 'present' : 'missing'}`);
+            console.log(`[PantryClip] Parsed refresh_token: ${refreshToken ? 'present' : 'missing'}`);
+
+            if (accessToken) {
+                console.log('[PantryClip] Sending AUTH_SESSION_CAPTURED message to background...');
+                chrome.runtime.sendMessage({
+                    type: 'AUTH_SESSION_CAPTURED',
+                    accessToken,
+                    refreshToken: refreshToken ?? null,
+                }, (response) => {
+                    console.log('[PantryClip] Response from background:', response);
+                });
+            } else {
+                console.error('[PantryClip] Auth callback path hit but no access_token found in URL fragment.');
+            }
+        } catch (e) {
+            console.error('[PantryClip] Failed to parse session hash:', e);
+        }
+    } else {
+        console.warn('[PantryClip] Hash does not contain "access_token"');
+    }
+}
 
 // ─── Tier 1: JSON-LD ──────────────────────────────────────────────────────────
 

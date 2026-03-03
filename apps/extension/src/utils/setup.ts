@@ -6,7 +6,7 @@ const stepDownloading = document.getElementById("step-downloading");
 const stepSyncing = document.getElementById("step-syncing");
 const stepReady = document.getElementById("step-ready");
 
-const btnOauth = document.getElementById("btn-oauth-google");
+const btnOauth = document.getElementById("btn-oauth-supabase");
 const btnShowByok = document.getElementById("btn-show-byok");
 const byokForm = document.getElementById("byok-form");
 const inputApiKey = document.getElementById("input-api-key") as HTMLInputElement | null;
@@ -210,9 +210,16 @@ btnSubmitByok?.addEventListener("click", async () => {
     startModelDownload();
 });
 
-// 2. OAuth Flow
+// 2. OAuth Flow — Tab-Capture strategy (no `identity` permission required)
+//
+// Instead of chrome.identity.launchWebAuthFlow (which needs the `identity`
+// permission), we open a real tab to mypantry.dev/auth/callback. Supabase
+// redirects to that URL after Google consent and writes the session to
+// localStorage. The content script on that page reads the session and sends
+// AUTH_SESSION_CAPTURED → background, which persists the tokens, closes the
+// tab, then fires AUTH_COMPLETE → here to advance the UI.
 
-/** Puts the Google button into a loading state while the OAuth window opens. */
+/** Puts the Google button into a loading state while the OAuth tab is open. */
 function setOauthLoading(loading: boolean) {
     const btn = btnOauth as HTMLButtonElement | null;
     if (!btn) return;
@@ -220,7 +227,6 @@ function setOauthLoading(loading: boolean) {
         btn.disabled = true;
         btn.classList.add("loading");
         btn.dataset.originalHtml = btn.innerHTML;
-        // Show a spinner + message so the user knows something is happening
         btn.innerHTML = `<span class="btn-spinner"></span>Opening Google sign-in…`;
     } else {
         btn.disabled = false;
@@ -232,10 +238,9 @@ function setOauthLoading(loading: boolean) {
     }
 }
 
-btnOauth?.addEventListener("click", () => {
-    // chrome.identity.launchWebAuthFlow requires HTTPS - we call Supabase directly.
-    // PUBLIC_SUPABASE_URL is injected at build time by Vite from the .env file.
+btnOauth?.addEventListener("click", async () => {
     const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
+    const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
     if (!supabaseUrl || supabaseUrl.includes("your-project-ref")) {
         console.error("PUBLIC_SUPABASE_URL is not configured in .env");
@@ -243,62 +248,27 @@ btnOauth?.addEventListener("click", () => {
         return;
     }
 
-    // Give immediate feedback — the OAuth window can take several seconds to appear
     setOauthLoading(true);
 
-    const extensionId = chrome.runtime.id;
-    // Chrome redirects auth responses to this ephemeral HTTPS origin so the extension can capture the token hash
-    // Use chrome.identity.getRedirectURL() - the canonical way to get this URL
-    const redirectUrl = chrome.identity.getRedirectURL();
-    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+    // Pre-save the environment variables to storage so the background script
+    // can access them without crashing from esbuild's lack of import.meta
+    await chrome.storage.local.set({
+        supabaseUrl,
+        supabaseAnonKey,
+        apiUrl: import.meta.env.PUBLIC_API_URL ?? 'http://127.0.0.1:8000',
+        llmProvider: 'google',
+        llmModel: 'gemini-2.5-flash',
+        plaintextApiKey: null,
+    });
 
-    console.log("[OAuth] Extension ID:", extensionId);
-    console.log("[OAuth] Redirect URL:", redirectUrl);
-    console.log("[OAuth] Auth URL:", authUrl);
+    // Supabase will redirect back to this page after the Google consent screen.
+    // The content script running on that page captures the session and notifies us.
+    const redirectTo = "https://mypantry.dev/auth/callback";
+    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
 
-    chrome.identity.launchWebAuthFlow(
-        { url: authUrl, interactive: true },
-        async (redirectUri) => {
-            if (chrome.runtime.lastError || !redirectUri) {
-                console.error("Auth flow failed or canceled", chrome.runtime.lastError);
-                // Restore the button so the user can try again
-                setOauthLoading(false);
-                return;
-            }
-
-            // The URL will look like: https://<id>.chromiumapp.org/#access_token=...&refresh_token=...
-            const hash = new URL(redirectUri).hash;
-            if (!hash) {
-                console.error("No hash fragment returned from auth flow");
-                setOauthLoading(false);
-                return;
-            }
-
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get("access_token");
-            const refreshToken = params.get("refresh_token");
-
-            if (accessToken) {
-                await chrome.storage.local.set({
-                    supabaseToken: accessToken,
-                    supabaseRefreshToken: refreshToken,
-                    supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL,
-                    supabaseAnonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
-                    // Persist the API base URL so the esbuild-compiled background worker
-                    // (which can't use import.meta.env) can read it from storage.
-                    apiUrl: import.meta.env.PUBLIC_API_URL ?? "http://127.0.0.1:8000",
-                    llmProvider: "google",
-                    llmModel: "gemini-2.5-flash",
-                    plaintextApiKey: null,
-                });
-                console.log("Successfully authenticated with Supabase!");
-                startModelDownload();
-            } else {
-                console.error("Authentication failed: No access token found in redirect URI.");
-                setOauthLoading(false);
-            }
-        }
-    );
+    console.log("[OAuth] Opening auth tab:", authUrl);
+    chrome.tabs.create({ url: authUrl });
+    // startModelDownload() is now called when we receive AUTH_COMPLETE below
 });
 
 // 3. Initiate model setup via Offscreen
@@ -386,8 +356,15 @@ async function doPostModelSync() {
     showState(stepReady);
 }
 
-// Listen for download progress from background/offscreen
+// Listen for messages from the background service worker
 chrome.runtime.onMessage.addListener((msg) => {
+    // AUTH_COMPLETE: background persisted the Supabase session after the
+    // content script captured it on mypantry.dev/auth/callback.
+    if (msg.type === "AUTH_COMPLETE") {
+        setOauthLoading(false);
+        startModelDownload();
+    }
+
     if (msg.type === "DOWNLOAD_PROGRESS") {
         const { loaded, total } = msg;
         if (total && total > 0) {

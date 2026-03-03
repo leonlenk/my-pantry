@@ -115,20 +115,11 @@ async function refreshSupabaseToken(): Promise<string | null> {
 
     console.log("[Auth] Token is missing or expiring soon. Attempting refresh...");
 
-    // The anon key is a public, non-secret credential. We bake it in at build time as a safe fallback
-    // for MV3 service-worker restarts where chrome.storage hasn't been written yet (popup not opened).
-    const builtInAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
-    const resolvedAnonKey = supabaseAnonKey || builtInAnonKey;
+    const resolvedAnonKey = supabaseAnonKey;
 
     if (!resolvedAnonKey) {
-        // Anon key is missing from both storage and the build — user must re-authenticate.
+        // Anon key is missing from storage — user must re-authenticate.
         throw new Error("Session expired. Please sign out and sign in again to refresh your credentials.");
-    }
-
-    // Persist the key so subsequent calls don't need to fall back to the build-time value.
-    if (!supabaseAnonKey && resolvedAnonKey) {
-        await chrome.storage.local.set({ supabaseAnonKey: resolvedAnonKey });
-        console.log("[Auth] Persisted missing supabaseAnonKey from build-time env to chrome.storage.");
     }
 
     try {
@@ -423,6 +414,34 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // ── Tab-Capture Auth: the content script on mypantry.dev/auth/callback ──
+    // forwards the Supabase session it read from localStorage. We persist the
+    // tokens, close the login tab, and notify the setup page to advance.
+    if (message.type === 'AUTH_SESSION_CAPTURED') {
+        (async () => {
+            const { accessToken, refreshToken } = message;
+            await chrome.storage.local.set({
+                supabaseToken: accessToken,
+                supabaseRefreshToken: refreshToken ?? null,
+            });
+
+            // Close the auth tab so the user lands back on whatever they had open
+            if (sender.tab?.id != null) {
+                chrome.tabs.remove(sender.tab.id);
+            }
+
+            // Notify the setup page (if it's still open) to advance its UI state
+            try {
+                await chrome.runtime.sendMessage({ type: 'AUTH_COMPLETE' });
+            } catch {
+                // Setup page might already be closed — not an error
+            }
+
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
     if (message.type === 'CHECK_MODEL_CACHED') {
         (async () => {
             await setupOffscreenDocument();

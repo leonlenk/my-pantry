@@ -25,7 +25,10 @@
         "activeTab",
         "storage",
         "offscreen",
-        "identity"
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://mypantry.dev/*"
     ],
     "content_scripts": [
         {

@@ -27,4 +27,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
-CMD ["fastapi", "run", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["fastapi", "run", "--host", "0.0.0.0", "--port", "8080"]
