@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.utils.logger import setup_logging
 from src.config import settings
-from src.routers import extract, substitute, auth, sync
+from src.routers import extract, substitute, auth, sync, privacy
 from loguru import logger
 import uvicorn
 
@@ -32,6 +32,7 @@ app.include_router(extract.router)
 app.include_router(substitute.router)
 app.include_router(sync.router)
 app.include_router(auth.router, prefix="/oauth", tags=["oauth"])
+app.include_router(privacy.router)
 
 from fastapi.responses import HTMLResponse
 
