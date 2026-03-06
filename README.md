@@ -10,7 +10,25 @@
 
 **MyPantry** (Extension Name: **Pantry Clip**) is a privacy-first, hybrid-architecture recipe assistant. It consists of a minimal-permission browser extension acting as the edge client, and a rate-limited Python FastAPI backend for cloud synchronization and LLM orchestration. 
 
-![MyPantry Preview](general_assets/pantry_preview.png)
+## 📸 Visual Showcase
+
+<div align="center">
+  <h3>The Main Dashboard</h3>
+  <img src="general_assets/pantry_preview.png" alt="MyPantry Main Dashboard" width="100%">
+  <br><br>
+  <table width="100%">
+    <tr>
+      <td align="center" width="50%">
+        <b>Extension Popup</b><br>
+        <img src="general_assets/extension_popup.png" alt="Extension Popup" width="300">
+      </td>
+      <td align="center" width="50%">
+        <b>Mobile Ingredients</b><br>
+        <img src="general_assets/mobile_ingredients.png" alt="Mobile Ingredients View" width="300">
+      </td>
+    </tr>
+  </table>
+</div>
 
 The system leverages on-device edge AI for computing vector embeddings, enabling zero-cost backend scaling while keeping all user data perfectly private. It supports a fully local **Bring Your Own Key (BYOK)** mode as well as a **Freemium Cloud-Synced** mode powered by Google OAuth.
 
