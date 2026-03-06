@@ -676,11 +676,26 @@ const sparkleIcon =
                         opts = { width: 14, height: 14 }
                     ) => (feather.icons[name] as any)?.toSvg(opts) || "";
 
+                    // Format minutes into e.g. "30 min", "1 hr", "1 hr 30 min"
+                    const formatTime = (mins: number): string => {
+                        if (mins < 60) return `${mins} min`;
+                        const h = Math.floor(mins / 60);
+                        const m = mins % 60;
+                        return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+                    };
+
+                    // Compute display time: prefer totalTimeMinutes, fall back to prep+cook sum
+                    const displayTime =
+                        currentRecipe.totalTimeMinutes ||
+                        (currentRecipe.prepTimeMinutes || 0) +
+                            (currentRecipe.cookTimeMinutes || 0) ||
+                        null;
+
                     const metaHtml = [
-                        currentRecipe.totalTimeMinutes
-                            ? `<span class="meta-item">${safeIcon("clock")} ${
-                                  currentRecipe.totalTimeMinutes
-                              }m</span>`
+                        displayTime
+                            ? `<span class="meta-item">${safeIcon(
+                                  "clock"
+                              )} ${formatTime(displayTime)}</span>`
                             : null,
                         currentRecipe.servings
                             ? `<span class="meta-item">${safeIcon("users")} ${

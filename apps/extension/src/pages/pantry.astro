@@ -421,12 +421,26 @@ import RecipeGrid from "../components/pantry/RecipeGrid.astro";
             return (feather.icons[name] as any)?.toSvg(opts) ?? "";
           };
 
+          // Format minutes into e.g. "30 min", "1 hr", "1 hr 30 min"
+          const formatTime = (mins: number): string => {
+            if (mins < 60) return `${mins} min`;
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+          };
+
+          // Prefer totalTimeMinutes; fall back to prep+cook sum (Cloud API only sets those)
+          const displayTime =
+            recipe.totalTimeMinutes ||
+            (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0) ||
+            null;
+
           const metaHtml = [
-            recipe.totalTimeMinutes
+            displayTime
               ? `<span class="meta-item">${safeIcon("clock", {
                   width: 14,
                   height: 14,
-                })} ${recipe.totalTimeMinutes}m</span>`
+                })} ${formatTime(displayTime)}</span>`
               : null,
             recipe.servings
               ? `<span class="meta-item">${safeIcon("users", {
