@@ -1,0 +1,119 @@
+---
+import Dropdown from "../common/Dropdown.astro";
+import feather from "feather-icons";
+
+const editIcon =
+    feather.icons["edit-3"]?.toSvg({ width: 16, height: 16 }) || "";
+const sparkleIcon =
+    feather.icons["zap"]?.toSvg({ width: 16, height: 16 }) || "";
+---
+
+<!-- Loading + Error states live outside the article so they're always visible -->
+<div id="loading" class="loading">Loading recipe...</div>
+<div id="error-state" class="error-state hidden">
+    <h2>Recipe not found</h2>
+    <p>This recipe might have been deleted or never existed.</p>
+    <a href="pantry.html" class="btn">Return to Pantry</a>
+</div>
+
+<article id="recipe-article" class="recipe-article hidden">
+    <header class="article-header" id="recipe-display-header">
+        <div
+            class="title-row"
+            style="display: flex; justify-content: center; align-items: center; gap: var(--spacing-sm); margin-bottom: var(--spacing-md);"
+        >
+            <div
+                class="title-container"
+                style="position: relative; display: inline-block;"
+            >
+                <h1 id="recipe-title" style="margin: 0;"></h1>
+                <input
+                    type="text"
+                    id="recipe-title-input"
+                    class="title-edit-input hidden"
+                />
+                <button
+                    id="edit-title-btn"
+                    class="title-pencil"
+                    title="Edit Title"
+                    set:html={editIcon}></button>
+            </div>
+        </div>
+        <div class="meta-tags" id="recipe-meta"></div>
+        <p class="description" id="recipe-desc"></p>
+    </header>
+
+    <div class="grid-layout">
+        <section class="ingredients-section card">
+            <div
+                class="section-header"
+                style="flex-direction: column; align-items: flex-start; gap: var(--spacing-sm);"
+            >
+                <h2 style="margin-bottom: 0;">Ingredients</h2>
+                <div
+                    class="controls-row"
+                    style="display: flex; gap: 1rem; align-items: center; width: 100%; justify-content: space-between;"
+                >
+                    <div class="unit-control">
+                        <Dropdown
+                            id="unit-system-select"
+                            label="US (Volume)"
+                            className="left-aligned"
+                            initialValue="us"
+                            items={[
+                                { value: "us", label: "US (Volume)" },
+                                { value: "metric", label: "Metric (Grams)" },
+                            ]}
+                        />
+                    </div>
+                    <div class="batch-control">
+                        <label for="batch-input">Yield:</label>
+                        <input
+                            type="number"
+                            id="batch-input"
+                            step="1"
+                            min="1"
+                            value="1"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div
+                style="margin-top: var(--spacing-md); margin-bottom: var(--spacing-lg); display: flex; justify-content: center;"
+            >
+                <button
+                    id="open-sub-modal-btn"
+                    class="btn outline"
+                    style="font-size: 0.85rem; padding: 0.3rem 0.6rem; display: flex; align-items: center; gap: 6px;"
+                >
+                    <span set:html={sparkleIcon}></span>
+                    Ask for Substitutions
+                </button>
+            </div>
+
+            <ul id="ingredients-list" class="ingredients-list"></ul>
+        </section>
+
+        <section class="instructions-section">
+            <h2>Instructions</h2>
+            <div id="instructions-list" class="instructions-list"></div>
+            <div
+                id="recipe-notes-section"
+                class="notes-section"
+                style="display: none; margin-top: var(--spacing-xl); padding-top: var(--spacing-md); border-top: 1px dashed var(--color-border);"
+            >
+                <h2
+                    style="font-size: 1.5rem; margin-bottom: var(--spacing-sm);"
+                >
+                    Recipe Notes
+                </h2>
+                <ol
+                    id="recipe-notes-list"
+                    style="padding-left: 1.5rem; color: var(--color-text-muted); font-size: 1rem; line-height: 1.6;"
+                >
+                </ol>
+            </div>
+        </section>
+    </div>
+</article>

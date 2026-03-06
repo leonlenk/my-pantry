@@ -1,0 +1,48 @@
+/*
+ * Recipe – Instructions Section Styles
+ */
+
+.instructions-section {
+    h2 {
+        font-size: 1.8rem;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .instruction-group-header {
+        font-size: 1.4rem;
+        margin-top: var(--spacing-xl);
+        margin-bottom: var(--spacing-md);
+        color: var(--color-text);
+
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+
+    .instruction-step {
+        display: flex;
+        gap: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+
+        .step-num {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--color-accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.7;
+            margin: 0;
+            padding-top: 6px;
+        }
+    }
+}

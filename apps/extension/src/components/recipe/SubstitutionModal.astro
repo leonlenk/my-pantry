@@ -1,0 +1,46 @@
+---
+// SubstitutionModal.astro — the overlay modal for AI ingredient substitutions.
+// Opening/closing and all request logic is handled by substitutionController.ts.
+---
+
+<div id="sub-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <button id="close-sub-modal-btn" class="close-btn">&times;</button>
+        <h2>Ask for Substitutions</h2>
+        <p>
+            What ingredient do you want to substitute, and do you have any
+            specific needs (e.g. vegan, gluten-free, no dairy)?
+        </p>
+
+        <div class="sub-input-group mt">
+            <input
+                type="text"
+                id="sub-input"
+                placeholder="e.g. Substitute the egg with something vegan..."
+            />
+            <button id="sub-send-btn" class="btn primary">Ask AI</button>
+        </div>
+
+        <div id="sub-status-area" class="sub-status-area hidden mt">
+            <div class="spinner"></div>
+            <span id="sub-status-text">Analyzing recipe...</span>
+        </div>
+
+        <div id="sub-result-area" class="sub-result-area hidden mt">
+            <h3>Reasoning</h3>
+            <p id="sub-reasoning-text" class="reasoning-text"></p>
+
+            <div id="sub-suggestions-container"></div>
+
+            <div
+                style="text-align: right; margin-top: var(--spacing-md); display: flex; justify-content: flex-end; gap: var(--spacing-sm);"
+            >
+                <button id="discard-sub-btn" class="btn outline">Discard</button
+                >
+                <button id="apply-sub-btn" class="btn primary"
+                    >Apply to Recipe</button
+                >
+            </div>
+        </div>
+    </div>
+</div>

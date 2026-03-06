@@ -1,0 +1,354 @@
+/*
+ * Pantry – Recipe Card Styles
+ * Used by: JS-rendered recipe cards in recipe-grid
+ */
+
+.recipe-card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-xl);
+    background: linear-gradient(145deg,
+            var(--color-surface) 0%,
+            var(--color-bg) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+    opacity: 0;
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+
+    &.highlight-new {
+        animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, highlightNew 4s ease-out 0.6s;
+    }
+
+    .card-back {
+        background: var(--color-surface);
+        transform: rotateY(180deg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border: 1px solid rgba(0, 0, 0, 0.03);
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+
+        .no-image {
+            color: var(--color-text-muted);
+            opacity: 0.5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-sm);
+
+            svg {
+                width: 48px;
+                height: 48px;
+            }
+        }
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+
+        h3 {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: -0.02em;
+            flex: 1;
+        }
+    }
+
+    .card-actions {
+        display: flex;
+        gap: var(--spacing-xs);
+        transition: opacity 0.2s ease;
+    }
+
+    .delete-btn,
+    .favorite-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: var(--radius-sm);
+        transition: all 0.2s ease;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .delete-btn {
+        color: var(--color-text-muted);
+        font-size: 1rem;
+        opacity: 0.4;
+        transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+
+        &:hover {
+            opacity: 1;
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+    }
+
+    .favorite-btn {
+        color: #f59e0b;
+        font-size: 1.2rem;
+
+        &:hover {
+            background: rgba(245, 158, 11, 0.1);
+            transform: scale(1.1);
+        }
+    }
+
+    .meta {
+        font-size: 0.8rem;
+        color: var(--color-text-muted);
+        margin-bottom: var(--spacing-sm);
+        margin-top: 0;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0;
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            svg {
+                opacity: 0.7;
+            }
+        }
+
+        .dot {
+            margin: 0 8px;
+            opacity: 0.4;
+        }
+    }
+
+    .desc {
+        font-size: 0.95rem;
+        flex: 1;
+        line-height: 1.6;
+        color: var(--color-text-muted);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .content-flip-container {
+        flex: 1;
+        perspective: 1000px;
+        display: flex;
+        flex-direction: column;
+        min-height: 150px;
+
+        .content-flip-inner {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        &:hover .content-flip-inner {
+            transform: rotateX(180deg);
+        }
+
+        .content-front {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            backface-visibility: hidden;
+        }
+
+        .content-back {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            transform: rotateX(180deg);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+
+            img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                opacity: 0.9;
+                border-radius: var(--radius-sm);
+            }
+        }
+    }
+
+    .card-footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: var(--spacing-md);
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--color-accent);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.4s ease;
+    }
+
+    &:hover {
+        transform: translateY(-6px) scale(1.01);
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
+        border-color: rgba(139, 115, 85, 0.1);
+
+        .card-actions .delete-btn {
+            opacity: 1;
+        }
+
+        &::after {
+            transform: scaleX(1);
+        }
+
+        .view-btn {
+            color: var(--color-accent-hover);
+            transform: translateX(4px);
+        }
+    }
+
+    h3 {
+        margin-bottom: var(--spacing-sm);
+        font-size: 1.4rem;
+        letter-spacing: -0.02em;
+    }
+
+    p {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--color-text-muted);
+    }
+
+    .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-lg);
+        margin-top: var(--spacing-md);
+
+        .tag {
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            background-color: rgba(139, 115, 85, 0.08);
+            border: 1px solid rgba(139, 115, 85, 0.15);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: var(--color-accent);
+        }
+    }
+
+    .view-btn {
+        font-weight: 600;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+
+    // ── Skeleton / placeholder card states ───────────────────────────────────
+
+    &.skeleton-error {
+        pointer-events: none;
+        border-color: rgba(220, 38, 38, 0.35) !important;
+        background: linear-gradient(145deg, rgba(220, 38, 38, 0.04) 0%, var(--color-bg) 100%) !important;
+
+        .skeleton-title {
+            color: rgba(220, 38, 38, 0.9) !important;
+        }
+
+        .status-badge {
+            color: #dc2626 !important;
+            font-style: normal !important;
+
+            &::before {
+                background-color: #dc2626 !important;
+                animation: none !important;
+                opacity: 1 !important;
+            }
+        }
+    }
+
+    &.skeleton-fade-out {
+        animation: fadeOut 0.5s ease forwards !important;
+    }
+
+    &.skeleton {
+        pointer-events: none;
+        background: linear-gradient(145deg, var(--color-surface) 0%, var(--color-bg) 100%);
+        border: 1px dashed var(--color-border);
+        box-shadow: none;
+
+        .skeleton-meta,
+        .skeleton-text {
+            background: linear-gradient(90deg,
+                    rgba(139, 115, 85, 0.05) 25%,
+                    rgba(139, 115, 85, 0.12) 50%,
+                    rgba(139, 115, 85, 0.05) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite linear;
+            border-radius: 4px;
+        }
+
+        .skeleton-meta {
+            height: 16px;
+            width: 40%;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .skeleton-text {
+            height: 14px;
+            width: 90%;
+            margin-bottom: var(--spacing-xs);
+
+            &:last-child {
+                width: 60%;
+            }
+        }
+
+        .status-badge {
+            margin-top: auto;
+            font-size: 0.8rem;
+            color: var(--color-accent);
+            font-weight: 600;
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            &::before {
+                content: "";
+                width: 8px;
+                height: 8px;
+                background-color: var(--color-accent);
+                border-radius: 50%;
+                display: inline-block;
+                animation: pulse 1s infinite alternate;
+            }
+        }
+    }
+}

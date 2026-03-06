@@ -1,0 +1,17 @@
+---
+import feather from "feather-icons";
+
+const editIcon =
+    feather.icons["edit-3"]?.toSvg({ width: 16, height: 16 }) || "";
+const sparkleIcon =
+    feather.icons["zap"]?.toSvg({ width: 16, height: 16 }) || "";
+---
+
+<header class="top-bar">
+    <button class="btn outline" id="back-btn">← Back to Pantry</button>
+    <div class="top-bar-actions" style="display: flex; gap: var(--spacing-sm);">
+        <a href="#" target="_blank" id="source-link" class="btn primary hidden"
+            >View Source</a
+        >
+    </div>
+</header>

@@ -247,3 +247,26 @@ export function formatUSVolume(quantity: number, unitStr: string | null): { disp
         displayUnit: isSingular ? "tsp" : "tsp"
     };
 }
+
+/**
+ * Formats a duration in minutes to a human-readable string.
+ * e.g. 30 → "30 min", 60 → "1 hr", 90 → "1 hr 30 min"
+ */
+export function formatTime(mins: number): string {
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+}
+
+/**
+ * Escapes a string so it is safe to embed directly into innerHTML.
+ */
+export function escapeHtml(unsafe: string): string {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
