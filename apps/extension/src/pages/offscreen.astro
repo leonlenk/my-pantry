@@ -41,14 +41,6 @@
                         {
                             dtype: "q8",
                             device: "webgpu",
-                            progress_callback: (info) => {
-                                chrome.runtime
-                                    .sendMessage({
-                                        type: "DOWNLOAD_PROGRESS",
-                                        ...info,
-                                    })
-                                    .catch(() => {});
-                            },
                         }
                     );
                 }

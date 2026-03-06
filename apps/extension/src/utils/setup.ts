@@ -2,7 +2,6 @@ import { initializeByokForm } from "./byok";
 
 // Elements
 const stepLogin = document.getElementById("step-login");
-const stepDownloading = document.getElementById("step-downloading");
 const stepSyncing = document.getElementById("step-syncing");
 const stepReady = document.getElementById("step-ready");
 
@@ -19,8 +18,6 @@ initializeByokForm({
     isSettingsMode: false
 });
 
-const progressBar = document.getElementById("progress-bar-fill");
-const progressText = document.getElementById("progress-text");
 const syncBar = document.getElementById("sync-bar-fill");
 const syncText = document.getElementById("sync-text");
 const btnCloseTab = document.getElementById("btn-close-tab");
