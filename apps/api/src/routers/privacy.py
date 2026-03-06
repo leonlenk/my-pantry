@@ -11,6 +11,12 @@ _PRIVACY_HTML = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy – MyPantry</title>
+    <meta name="description" content="MyPantry is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <meta property="og:title" content="Privacy Policy – MyPantry">
+    <meta property="og:description" content="MyPantry is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
+    <meta property="og:image" content="/static/pantry_preview.png">
+    <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">

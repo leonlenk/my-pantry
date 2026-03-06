@@ -9,6 +9,12 @@ _HOME_HTML = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pantry Clip – MyPantry</title>
+    <meta name="description" content="Pantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <meta property="og:title" content="Pantry Clip – MyPantry">
+    <meta property="og:description" content="Pantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
+    <meta property="og:image" content="/static/pantry_preview.png">
+    <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">

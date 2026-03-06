@@ -234,8 +234,9 @@ Extract the recipe into the specified JSON format.
                 createdAt: Date.now(),
                 title: cloudData.recipe.title,
                 description: cloudData.recipe.description,
-                prepTimeMinutes: parseInt(cloudData.recipe.prepTime) || undefined,
-                cookTimeMinutes: parseInt(cloudData.recipe.cookTime) || undefined,
+                prepTimeMinutes: cloudData.recipe.prepTime || undefined,
+                cookTimeMinutes: cloudData.recipe.cookTime || undefined,
+                tags: cloudData.recipe.tags || undefined,
                 servings: cloudData.recipe.servings,
                 notes: cloudData.recipe.notes || [],
                 ingredients: cloudData.recipe.ingredients.map((ing: any) => {

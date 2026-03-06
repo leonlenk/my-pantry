@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.utils.logger import setup_logging
@@ -6,6 +7,7 @@ from src.config import settings
 from src.routers import extract, substitute, auth, sync, privacy, home
 from loguru import logger
 import uvicorn
+import os
 
 setup_logging()
 
@@ -14,6 +16,11 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json"
 )
+
+# Mount static files directory
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.on_event("startup")
 def startup_event():
@@ -47,7 +54,13 @@ def auth_callback():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Authorizing...</title>
+        <title>Authorizing... | MyPantry</title>
+        <meta name="description" content="Securely linking your MyPantry account.">
+        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+        <meta property="og:title" content="MyPantry Authorization">
+        <meta property="og:description" content="Securely linking your MyPantry account.">
+        <meta property="og:image" content="/static/pantry_preview.png">
+        <meta property="og:type" content="website">
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

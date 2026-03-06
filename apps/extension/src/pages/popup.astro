@@ -30,12 +30,14 @@ import MainView from "../components/popup/MainView.astro";
               "setupComplete",
               "plaintextApiKey",
               "encryptedApiKey",
+              "supabaseToken",
             ]);
 
             if (
               !data.setupComplete &&
               !data.plaintextApiKey &&
-              !data.encryptedApiKey
+              !data.encryptedApiKey &&
+              !data.supabaseToken
             ) {
               chrome.tabs.create({ url: chrome.runtime.getURL("setup.html") });
             } else {
