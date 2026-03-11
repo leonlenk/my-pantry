@@ -90,7 +90,7 @@ btnOauth?.addEventListener("click", async () => {
     // Supabase will redirect back to this page after the Google consent screen.
     // The content script running on that page captures the session and notifies us.
     const redirectTo = "https://mypantry.dev/api/auth/callback";
-    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
+    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=consent`;
 
     console.log("[OAuth] Opening auth tab:", authUrl);
     chrome.tabs.create({ url: authUrl });

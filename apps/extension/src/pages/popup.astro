@@ -22,6 +22,25 @@ import MainView from "../components/popup/MainView.astro";
       // ------------- View State -------------
       const mainView = document.getElementById("main-view");
 
+      function parseJwt(token: string) {
+        try {
+          const base64Url = token.split(".")[1];
+          // Provide an empty fallback if payload is missing
+          if (!base64Url) return null;
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          return JSON.parse(jsonPayload);
+        } catch (e) {
+          console.warn("Failed to parse JWT", e);
+          return null;
+        }
+      }
+
       // Check storage on load to auto-show setup if no config exists
       document.addEventListener("DOMContentLoaded", async () => {
         try {
@@ -53,6 +72,41 @@ import MainView from "../components/popup/MainView.astro";
               if (!data.supabaseToken) {
                 const settingsBtn = document.getElementById("settings-btn");
                 if (settingsBtn) settingsBtn.classList.remove("hidden");
+
+                // Show fallback Log Out text for BYOK users
+                const logoutBtn = document.getElementById("logout-btn");
+                if (logoutBtn) logoutBtn.classList.remove("hidden");
+              } else {
+                // Cloud User - setup Profile Badge
+                const payload = parseJwt(data.supabaseToken);
+                if (payload && payload.email) {
+                  const profileBadgeBtn =
+                    document.getElementById("profile-badge-btn");
+                  const profileEmailDisplay = document.getElementById(
+                    "profile-email-display"
+                  );
+                  const profileAvatar = document.getElementById(
+                    "profile-avatar"
+                  ) as HTMLImageElement;
+
+                  if (profileBadgeBtn && profileEmailDisplay && profileAvatar) {
+                    profileBadgeBtn.classList.remove("hidden");
+                    profileEmailDisplay.textContent = payload.email;
+
+                    // Google sets avatar_url in user_metadata
+                    if (
+                      payload.user_metadata &&
+                      payload.user_metadata.avatar_url
+                    ) {
+                      profileAvatar.src = payload.user_metadata.avatar_url;
+                      profileAvatar.style.display = "block";
+                    }
+                  }
+                } else {
+                  // Fallback to text if parsing fails
+                  const logoutBtn = document.getElementById("logout-btn");
+                  if (logoutBtn) logoutBtn.classList.remove("hidden");
+                }
               }
             }
           }
@@ -62,10 +116,10 @@ import MainView from "../components/popup/MainView.astro";
       });
 
       // ------------- Main Panel API -------------
+      // Logic for the fallback (BYOK) log out button
       const logoutBtn = document.getElementById("logout-btn");
       logoutBtn?.addEventListener("click", async () => {
         if (typeof chrome !== "undefined" && chrome.storage) {
-          // Clear all authentication & config states
           await chrome.storage.local.remove([
             "setupComplete",
             "plaintextApiKey",
@@ -75,7 +129,89 @@ import MainView from "../components/popup/MainView.astro";
             "llmProvider",
             "llmModel",
           ]);
-          // Clear memory cache
+          chrome.runtime.sendMessage({ type: "CLEAR_CACHED_API_KEY" });
+          window.close();
+        }
+      });
+
+      // Logic for Profile Dropdown Toggling
+      const profileBadgeBtn = document.getElementById("profile-badge-btn");
+      const profileDropdownMenu = document.getElementById(
+        "profile-dropdown-menu"
+      );
+
+      profileBadgeBtn?.addEventListener("click", (e) => {
+        e.stopPropagation(); // prevent document click from firing
+        profileDropdownMenu?.classList.toggle("hidden");
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", (e) => {
+        if (
+          profileDropdownMenu &&
+          !profileDropdownMenu.classList.contains("hidden")
+        ) {
+          const rect = profileDropdownMenu.getBoundingClientRect();
+          const badgeRect = profileBadgeBtn?.getBoundingClientRect();
+
+          const isClickInsideMenu =
+            e.clientX >= rect.left &&
+            e.clientX <= rect.right &&
+            e.clientY >= rect.top &&
+            e.clientY <= rect.bottom;
+          const isClickOnBadge = badgeRect
+            ? e.clientX >= badgeRect.left &&
+              e.clientX <= badgeRect.right &&
+              e.clientY >= badgeRect.top &&
+              e.clientY <= badgeRect.bottom
+            : false;
+
+          if (!isClickInsideMenu && !isClickOnBadge) {
+            profileDropdownMenu.classList.add("hidden");
+          }
+        }
+      });
+
+      // Switch Account button (logs out, then opens OAuth consent)
+      const switchAccountBtn = document.getElementById("switch-account-btn");
+      switchAccountBtn?.addEventListener("click", async () => {
+        if (typeof chrome !== "undefined" && chrome.storage) {
+          await chrome.storage.local.remove([
+            "setupComplete",
+            "plaintextApiKey",
+            "encryptedApiKey",
+            "supabaseToken",
+            "supabaseRefreshToken",
+            "llmProvider",
+            "llmModel",
+          ]);
+          chrome.runtime.sendMessage({ type: "CLEAR_CACHED_API_KEY" });
+
+          const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+          if (supabaseUrl && chrome.tabs) {
+            const redirectTo = "https://mypantry.dev/api/auth/callback";
+            const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
+              redirectTo
+            )}&prompt=consent`;
+            chrome.tabs.create({ url: authUrl });
+          }
+          window.close();
+        }
+      });
+
+      // Log Out button in dropdown (logs out, then sends user to setup screen)
+      const cloudLogoutBtn = document.getElementById("cloud-logout-btn");
+      cloudLogoutBtn?.addEventListener("click", async () => {
+        if (typeof chrome !== "undefined" && chrome.storage) {
+          await chrome.storage.local.remove([
+            "setupComplete",
+            "plaintextApiKey",
+            "encryptedApiKey",
+            "supabaseToken",
+            "supabaseRefreshToken",
+            "llmProvider",
+            "llmModel",
+          ]);
           chrome.runtime.sendMessage({ type: "CLEAR_CACHED_API_KEY" });
           window.close(); // Next time popup opens, it will redirect to setup.html
         }

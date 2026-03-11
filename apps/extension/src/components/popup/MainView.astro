@@ -11,20 +11,72 @@ import ByokForm from "../shared/ByokForm.astro";
                 <h1>Pantry Clip</h1>
                 <p>Your intelligent culinary assistant</p>
             </div>
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 4px; align-items: center;">
                 <button
                     id="settings-btn"
                     class="text-btn hidden"
                     style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--color-text-muted);"
-                    aria-label="Settings"
+                    title="Settings"
                 >
                     <i
                         data-feather="settings"
                         style="width: 16px; height: 16px;"></i>
                 </button>
+
+                <!-- Profile Badge (Cloud Users) -->
+                <div style="position: relative;" id="profile-menu-container">
+                    <button
+                        id="profile-badge-btn"
+                        class="hidden"
+                        style="display: flex; align-items: center; justify-content: center; background: none; border: 1px solid var(--color-border); cursor: pointer; padding: 2px; border-radius: 50%; transition: border-color 0.2s;"
+                    >
+                        <img
+                            id="profile-avatar"
+                            src=""
+                            alt="Profile"
+                            style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: none;"
+                        />
+                    </button>
+
+                    <!-- Profile Dropdown Menu -->
+                    <div
+                        id="profile-dropdown-menu"
+                        class="hidden"
+                        style="position: absolute; top: calc(100% + 4px); right: 0; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: max-content; min-width: 140px; z-index: 100; display: flex; flex-direction: column; overflow: hidden;"
+                    >
+                        <div
+                            style="padding: 8px 12px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.02);"
+                        >
+                            <span
+                                id="profile-email-display"
+                                style="font-size: 0.75rem; color: var(--color-text-muted); font-weight: 500; display: block; white-space: nowrap;"
+                            ></span>
+                        </div>
+                        <button
+                            id="switch-account-btn"
+                            class="text-btn"
+                            style="text-align: left; padding: 8px 12px; font-size: 0.8rem; border: none; background: none; cursor: pointer; color: var(--color-text); width: 100%; transition: background 0.1s;"
+                            onmouseover="this.style.background='rgba(0,0,0,0.04)'"
+                            onmouseout="this.style.background='none'"
+                        >
+                            Switch Account
+                        </button>
+                        <button
+                            id="cloud-logout-btn"
+                            class="text-btn"
+                            style="text-align: left; padding: 8px 12px; font-size: 0.8rem; border: none; background: none; cursor: pointer; color: #ef4444; width: 100%; transition: background 0.1s;"
+                            onmouseover="this.style.background='rgba(239,68,68,0.08)'"
+                            onmouseout="this.style.background='none'"
+                        >
+                            Log Out
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fallback Logout (BYOK Users) -->
                 <button
                     id="logout-btn"
-                    class="text-btn"
+                    class="text-btn hidden"
                     style="font-size: 0.8rem; color: var(--color-text-muted); text-decoration: underline; background: none; border: none; cursor: pointer; padding: 4px;"
                 >
                     Log Out
