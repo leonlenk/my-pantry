@@ -11,13 +11,25 @@ let creating: Promise<void> | null;
 // Temporary in-memory cache for the decrypted BYOK API key (1 hour expiration)
 let cachedDecryptedApiKey: { key: string, expiresAt: number } | null = null;
 
-// Track active extractions by normalized URL
+// Track active extractions by normalized URL.
+// Backed by chrome.storage.session so the map survives service-worker restarts
+// (the SW is killed whenever Chrome deems it idle, wiping all in-memory state).
+// storage.session is cleared automatically when the browser closes, which is the
+// correct lifetime for "currently extracting" state.
 interface ExtractionState {
     status: string;
     tabId: number;
     title?: string;
 }
-const activeExtractions: Record<string, ExtractionState> = {};
+
+async function getActiveExtractions(): Promise<Record<string, ExtractionState>> {
+    const stored = await chrome.storage.session.get("activeExtractions");
+    return (stored.activeExtractions as Record<string, ExtractionState>) ?? {};
+}
+
+async function setActiveExtractions(map: Record<string, ExtractionState>): Promise<void> {
+    await chrome.storage.session.set({ activeExtractions: map });
+}
 
 // Keep-alive mechanism to prevent service worker from sleeping during long LLM requests
 let keepAliveInterval: any = null;
@@ -184,18 +196,20 @@ async function setupOffscreenDocument() {
 
 async function updateExtractionStatus(url: string, tabId: number, status: string, isError: boolean = false, isComplete: boolean = false, recipeTitle?: string) {
     const normUrl = normalizeUrl(url);
-    const existingTitle = activeExtractions[normUrl]?.title;
+    const map = await getActiveExtractions();
+    const existingTitle = map[normUrl]?.title;
     const finalTitle = recipeTitle || existingTitle;
 
     if (isComplete || isError) {
-        delete activeExtractions[normUrl];
+        delete map[normUrl];
         chrome.action.setBadgeText({ text: isError ? "ERR" : "✓", tabId }).catch(() => { });
         chrome.action.setBadgeBackgroundColor({ color: isError ? "#EF4444" : "#10B981", tabId }).catch(() => { });
     } else {
-        activeExtractions[normUrl] = { status, tabId, title: finalTitle };
+        map[normUrl] = { status, tabId, title: finalTitle };
         chrome.action.setBadgeText({ text: "...", tabId }).catch(() => { });
         chrome.action.setBadgeBackgroundColor({ color: "#F59E0B", tabId }).catch(() => { });
     }
+    await setActiveExtractions(map);
 
     try {
         // Attempt to send to popup if it's open
@@ -498,26 +512,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'START_EXTRACTION') {
         const { tabId, url, apiKey, llmModel, llmProvider, authMode } = message;
         const normUrl = normalizeUrl(url);
-        if (!activeExtractions[normUrl]) {
-            executeExtractionInBackground(normUrl, tabId, apiKey, llmModel, llmProvider, authMode);
-        }
-        sendResponse({ success: true, status: activeExtractions[normUrl]?.status || "Starting extraction..." });
+        (async () => {
+            const map = await getActiveExtractions();
+            if (!map[normUrl]) {
+                executeExtractionInBackground(normUrl, tabId, apiKey, llmModel, llmProvider, authMode);
+            }
+            sendResponse({ success: true, status: map[normUrl]?.status || "Starting extraction..." });
+        })();
         return true;
     }
 
     if (message.type === 'GET_EXTRACTION_STATUS') {
         const { url } = message;
         const normUrl = normalizeUrl(url);
-        const active = activeExtractions[normUrl];
-        sendResponse({
-            isActive: !!active,
-            status: active ? active.status : null
-        });
+        (async () => {
+            const map = await getActiveExtractions();
+            const active = map[normUrl];
+            sendResponse({
+                isActive: !!active,
+                status: active ? active.status : null
+            });
+        })();
         return true;
     }
 
     if (message.type === 'GET_ALL_EXTRACTIONS') {
-        sendResponse({ extractions: activeExtractions });
+        (async () => {
+            const map = await getActiveExtractions();
+            sendResponse({ extractions: map });
+        })();
         return true;
     }
 
@@ -633,10 +656,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // We only need to re-apply if it finished loading a new page/refresh
     if (changeInfo.status === 'complete' && tab.url) {
         const normUrl = normalizeUrl(tab.url);
-        const active = activeExtractions[normUrl];
+        const map = await getActiveExtractions();
+        const active = map[normUrl];
         if (active) {
             // Update the tab ID we're tracking for this URL since they might have opened it in a new tab
             active.tabId = tabId;
+            await setActiveExtractions(map);
             chrome.action.setBadgeText({ text: "...", tabId }).catch(() => { });
             chrome.action.setBadgeBackgroundColor({ color: "#F59E0B", tabId }).catch(() => { });
         }

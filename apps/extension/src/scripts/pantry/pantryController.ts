@@ -375,12 +375,16 @@ function renderRecipes(recipes: Recipe[]) {
     if (!grid || !emptyState) return;
     grid.innerHTML = "";
 
-    // Render active extraction placeholders first
+    // Render active extraction placeholders first.
+    // Skeleton cards must get .in-view immediately — they start at opacity:0
+    // like every other .recipe-card but are excluded from the IntersectionObserver
+    // rAF loop below (which only processes non-skeleton cards). Without .in-view
+    // the shimmer card would be invisible forever.
     Object.entries(activeExtractions).forEach(([url, data], index) => {
         const placeholder = document.createElement("div");
         const safeId = "placeholder-" + url.replace(/[^a-zA-Z0-9_-]/g, "");
         placeholder.id = safeId;
-        placeholder.className = "card recipe-card skeleton";
+        placeholder.className = "card recipe-card skeleton in-view";
         (placeholder.style as any).viewTransitionName = `placeholder-view-${index}`;
         placeholder.innerHTML = buildPlaceholderHtml(data.title, data.status);
         grid.appendChild(placeholder);
