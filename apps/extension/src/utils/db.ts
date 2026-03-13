@@ -11,6 +11,12 @@ const DB_NAME = "mypantry";
 const DB_VERSION = 2;
 const STORE_NAME = "recipes";
 
+function normalizeTags(tags?: string[]): string[] {
+    if (!Array.isArray(tags)) return [];
+    return Array.from(new Set(tags.map(t => t.trim()).filter(Boolean).map(t => t.toUpperCase())))
+        .sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Opens (and initialises on first run) the IndexedDB database.
  * The `recipes` object store uses `id` (a URL-derived slug) as its keyPath.
@@ -44,9 +50,7 @@ function openDb(): Promise<IDBDatabase> {
  * and updates the saved URLs cache in chrome.storage.local.
  */
 export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
-    if (recipe.tags) {
-        recipe.tags = recipe.tags.map(t => t.toUpperCase());
-    }
+    recipe.tags = normalizeTags(recipe.tags);
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readwrite");
@@ -84,9 +88,7 @@ export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
 export async function importRecipesLocally(recipes: Recipe[]): Promise<void> {
     if (!recipes || recipes.length === 0) return;
     recipes.forEach(r => {
-        if (r.tags) {
-            r.tags = r.tags.map(t => t.toUpperCase());
-        }
+        r.tags = normalizeTags(r.tags);
     });
 
     const db = await openDb();

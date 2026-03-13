@@ -483,12 +483,15 @@ async function loadRecipes() {
         if (!r.tags) {
             r.tags = [];
         }
-        r.tags = r.tags.map(t => t.toUpperCase());
+        r.tags = r.tags
+            .map(t => t.toUpperCase())
+            .sort((a, b) => a.localeCompare(b));
         if (r.url) {
             try {
                 const domain = new URL(r.url).hostname.replace(/^www\./, '').toUpperCase();
                 if (!r.tags.includes(domain)) {
                     r.tags.push(domain);
+                    r.tags.sort((a, b) => a.localeCompare(b));
                 }
             } catch (e) { }
         }

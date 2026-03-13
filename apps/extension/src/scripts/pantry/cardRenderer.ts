@@ -59,7 +59,11 @@ function buildContentHtml(recipe: Recipe): string {
     }
 
     const tagsHtml = recipe.tags
-        ? recipe.tags.filter(tag => tag !== domain).map((tag) => `<span class="tag">${tag}</span>`).join("")
+        ? [...recipe.tags]
+            .sort((a, b) => a.localeCompare(b))
+            .filter(tag => tag !== domain)
+            .map((tag) => `<span class="tag">${tag}</span>`)
+            .join("")
         : "";
 
     const description = (recipe.description || "").slice(0, 140);

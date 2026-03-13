@@ -51,7 +51,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         if (recipe.tags) {
-            recipe.tags = recipe.tags.map((t: string) => t.toUpperCase());
+            recipe.tags = recipe.tags
+                .map((t: string) => t.toUpperCase())
+                .sort((a: string, b: string) => a.localeCompare(b));
         }
         recipeState.currentRecipe = recipe;
         renderRecipe(recipe);
@@ -169,6 +171,7 @@ function wireDelegatedHandlers() {
                 recipe.tags = recipe.tags || [];
                 if (!recipe.tags.includes(newTag)) {
                     recipe.tags.push(newTag);
+                    recipe.tags.sort((a: string, b: string) => a.localeCompare(b));
                     await saveRecipeLocally(recipe);
                     renderTags();
                     setTimeout(() => {
