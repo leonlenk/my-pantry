@@ -15,6 +15,19 @@ const emptyIcon = feather.icons["book-open"].toSvg({ width: 48, height: 48 });
     <p>Extract recipes from the web using the Pantry Clip extension panel.</p>
 </div>
 
+<!-- Delete confirmation modal -->
+<div id="delete-confirm-overlay" class="delete-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+    <div class="delete-confirm-modal">
+        <h3 id="delete-confirm-title">Delete recipes?</h3>
+        <p class="delete-confirm-subtitle">This will permanently remove the following recipes from your pantry:</p>
+        <ul id="delete-confirm-list" class="delete-confirm-list"></ul>
+        <div class="delete-confirm-actions">
+            <button id="delete-confirm-cancel" class="delete-btn secondary">Cancel</button>
+            <button id="delete-confirm-continue" class="delete-btn danger">Delete</button>
+        </div>
+    </div>
+</div>
+
 <div id="bulk-action-bar" class="bulk-action-bar" aria-live="polite">
     <span id="bulk-selected-count" class="bulk-selected-count">0 recipes selected</span>
     <div class="bulk-action-buttons">

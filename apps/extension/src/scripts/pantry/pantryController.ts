@@ -566,15 +566,72 @@ async function applyBulkTags(tagsToApply: string[]) {
     await loadRecipes();
 }
 
+function confirmDeleteModal(initialIds: string[], initialTitles: string[]): Promise<string[]> {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById("delete-confirm-overlay");
+        const list = document.getElementById("delete-confirm-list");
+        const cancelBtn = document.getElementById("delete-confirm-cancel");
+        const continueBtn = document.getElementById("delete-confirm-continue") as HTMLButtonElement | null;
+        if (!overlay || !list || !cancelBtn || !continueBtn) {
+            resolve(initialIds);
+            return;
+        }
+
+        const xIcon = feather.icons["x"]?.toSvg({ width: 14, height: 14 }) ?? "×";
+        // Working copy so removals don't affect the caller's set until confirmed
+        const pending = new Map<string, string>(initialIds.map((id, i) => [id, initialTitles[i]]));
+
+        const renderList = () => {
+            list.innerHTML = "";
+            pending.forEach((title, id) => {
+                const li = document.createElement("li");
+                li.dataset.id = id;
+                li.innerHTML = `<span>${title}</span><button class="delete-list-remove" title="Remove from list">${xIcon}</button>`;
+                li.querySelector("button")!.addEventListener("click", () => {
+                    pending.delete(id);
+                    if (pending.size === 0) { onCancel(); return; }
+                    renderList();
+                    if (continueBtn) continueBtn.textContent = `Delete ${pending.size}`;
+                });
+                list.appendChild(li);
+            });
+        };
+
+        renderList();
+        continueBtn.textContent = `Delete ${pending.size}`;
+        overlay.classList.remove("hidden");
+
+        const cleanup = () => {
+            overlay.classList.add("hidden");
+            cancelBtn.removeEventListener("click", onCancel);
+            continueBtn!.removeEventListener("click", onConfirm);
+            overlay.removeEventListener("click", onOverlayClick);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+        const onCancel = () => { cleanup(); resolve([]); };
+        const onConfirm = () => { cleanup(); resolve(Array.from(pending.keys())); };
+        const onOverlayClick = (e: MouseEvent) => { if (e.target === overlay) onCancel(); };
+        const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+
+        cancelBtn.addEventListener("click", onCancel);
+        continueBtn.addEventListener("click", onConfirm);
+        overlay.addEventListener("click", onOverlayClick);
+        document.addEventListener("keydown", onKeyDown);
+    });
+}
+
 async function handleBulkDelete() {
     if (selectedRecipeIds.size === 0) return;
-    const confirmed = window.confirm(
-        `Delete ${selectedRecipeIds.size} selected recipe${selectedRecipeIds.size !== 1 ? "s" : ""}?`
-    );
-    if (!confirmed) return;
 
+    const allRecipes = await getAllRecipes();
+    const recipeMap = new Map(allRecipes.map((r) => [r.id, r]));
     const ids = Array.from(selectedRecipeIds);
-    await Promise.all(ids.map((id) => deleteRecipe(id)));
+    const titles = ids.map((id) => recipeMap.get(id)?.title ?? id);
+
+    const toDelete = await confirmDeleteModal(ids, titles);
+    if (toDelete.length === 0) return;
+
+    await Promise.all(toDelete.map((id) => deleteRecipe(id)));
     resetSelection();
     await loadRecipes();
 }
@@ -741,6 +798,9 @@ function wireSelectionControls() {
 
         if (event.key === "Escape" && isSelectionMode) {
             event.preventDefault();
+            // Let the delete modal handle its own Escape first
+            const deleteOverlay = document.getElementById("delete-confirm-overlay");
+            if (deleteOverlay && !deleteOverlay.classList.contains("hidden")) return;
             resetSelection();
             return;
         }
