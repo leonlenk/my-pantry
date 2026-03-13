@@ -8,7 +8,7 @@ const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
 <div class="search-bar-container">
     <div class="search-wrap">
         <div class="search-input-container">
-            <span class="search-icon" set:html={searchIcon}></span>
+            <button id="search-btn" class="search-icon-btn" title="Search" set:html={searchIcon}></button>
             <div id="search-badges" class="search-badges"></div>
             <input
                 type="text"
@@ -22,7 +22,6 @@ const clearIcon = feather.icons["x"]?.toSvg({ width: 18, height: 18 }) || "";
             <div id="search-suggestions" class="search-suggestions hidden">
             </div>
         </div>
-        <button class="primary" id="search-btn">Search</button>
     </div>
     <div class="count-wrap">
         <span id="recipe-count" class="recipe-count"></span>

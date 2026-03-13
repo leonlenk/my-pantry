@@ -96,12 +96,11 @@ function buildContentHtml(recipe: Recipe): string {
 export function buildRecipeCardHtml(recipe: Recipe): string {
     const metaHtml = buildMetaHtml(recipe);
     const contentHtml = buildContentHtml(recipe);
+    const checkIcon = safeIcon("check", { width: 14, height: 14 });
 
     const starIcon = recipe.isFavorite
         ? safeIcon("star", { width: 18, height: 18, fill: "currentColor" })
         : safeIcon("star", { width: 18, height: 18 });
-
-    const deleteIcon = safeIcon("x", { width: 18, height: 18 });
 
     return `
         <div class="card-header">
@@ -110,8 +109,8 @@ export function buildRecipeCardHtml(recipe: Recipe): string {
                 <button class="favorite-btn ${recipe.isFavorite ? "is-favorite" : ""}" data-id="${recipe.id}" title="Toggle favorite">
                     ${starIcon}
                 </button>
-                <button class="delete-btn" data-id="${recipe.id}" title="Delete recipe">
-                    ${deleteIcon}
+                <button class="select-indicator" data-id="${recipe.id}" aria-label="Select recipe">
+                    ${checkIcon}
                 </button>
             </div>
         </div>

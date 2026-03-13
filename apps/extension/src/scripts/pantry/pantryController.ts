@@ -42,6 +42,17 @@ const clearBtn = document.getElementById("clear-search");
 const searchBadgesContainer = document.getElementById("search-badges");
 const searchSuggestions = document.getElementById("search-suggestions");
 const unitPreferenceDropdown = document.getElementById("pantry-unit-pref");
+const bulkActionBar = document.getElementById("bulk-action-bar");
+const bulkSelectedCount = document.getElementById("bulk-selected-count");
+const bulkTagBtn = document.getElementById("bulk-tag-btn") as HTMLButtonElement | null;
+const bulkShareBtn = document.getElementById("bulk-share-btn") as HTMLButtonElement | null;
+const bulkDeleteBtn = document.getElementById("bulk-delete-btn") as HTMLButtonElement | null;
+const bulkTagEditor = document.getElementById("bulk-tag-editor");
+const bulkTagInput = document.getElementById("bulk-tag-input") as HTMLInputElement | null;
+const bulkTagChips = document.getElementById("bulk-tag-chips");
+const bulkTagSuggestionsEl = document.getElementById("bulk-tag-suggestions");
+const bulkTagApplyBtn = document.getElementById("bulk-tag-apply") as HTMLButtonElement | null;
+const bulkTagCancelBtn = document.getElementById("bulk-tag-cancel") as HTMLButtonElement | null;
 
 // ─── Page state ───────────────────────────────────────────────────────────────
 
@@ -63,6 +74,14 @@ try {
 }
 const allKnownTags = new Set<string>();
 let activeExtractions: Record<string, { status: string; title: string }> = {};
+let isSelectionMode = false;
+const selectedRecipeIds = new Set<string>();
+let visibleRecipeOrder: string[] = [];
+let lastSelectedRecipeId: string | null = null;
+let isBulkTagEditorOpen = false;
+let bulkPendingTags: string[] = [];
+let bulkTagSuggestions: string[] = [];
+let bulkTagSuggestionIndex = -1;
 
 // Shared IntersectionObserver: adds .in-view to each card when it is ~150px
 // from entering the viewport. Re-created on every render so stale entries
@@ -236,6 +255,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadRecipes();
     wireExtractionListener();
     wireSearchHandlers();
+    wireSelectionControls();
     wireImportExport();
 
     // Enable animations after first paint to prevent layout-shift flashes
@@ -244,6 +264,491 @@ document.addEventListener("DOMContentLoaded", async () => {
         requestAnimationFrame(() => document.body.classList.add("page-ready"))
     );
 });
+
+function syncSelectionModeClass() {
+    isSelectionMode = selectedRecipeIds.size > 0;
+    document.body.classList.toggle("selection-mode", isSelectionMode);
+}
+
+function updateSelectionUI() {
+    const selectedCount = selectedRecipeIds.size;
+
+    if (bulkSelectedCount) {
+        bulkSelectedCount.textContent = `${selectedCount} recipe${selectedCount !== 1 ? "s" : ""} selected`;
+    }
+
+    bulkActionBar?.classList.toggle("visible", selectedCount > 0);
+
+    if (bulkTagBtn) bulkTagBtn.disabled = selectedCount === 0;
+    if (bulkShareBtn) bulkShareBtn.disabled = selectedCount === 0;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedCount === 0;
+    if (selectedCount === 0 && isBulkTagEditorOpen) {
+        closeBulkTagEditor();
+    }
+}
+
+function resetSelection({ keepMode = false }: { keepMode?: boolean } = {}) {
+    selectedRecipeIds.clear();
+    lastSelectedRecipeId = null;
+    closeBulkTagEditor();
+    if (!keepMode) isSelectionMode = false;
+
+    grid?.querySelectorAll<HTMLElement>(".recipe-card").forEach((card) => {
+        card.classList.remove("selected");
+    });
+
+    syncSelectionModeClass();
+    updateSelectionUI();
+}
+
+function setCardSelectedState(card: HTMLElement, isSelected: boolean) {
+    card.classList.toggle("selected", isSelected);
+    card.setAttribute("aria-pressed", String(isSelected));
+}
+
+function toggleRecipeSelection(card: HTMLElement, recipeId: string) {
+    if (selectedRecipeIds.has(recipeId)) {
+        selectedRecipeIds.delete(recipeId);
+        setCardSelectedState(card, false);
+    } else {
+        selectedRecipeIds.add(recipeId);
+        setCardSelectedState(card, true);
+        syncSelectionModeClass();
+    }
+
+    lastSelectedRecipeId = recipeId;
+
+    syncSelectionModeClass();
+
+    updateSelectionUI();
+}
+
+function selectRecipeRange(toRecipeId: string) {
+    if (!lastSelectedRecipeId || visibleRecipeOrder.length === 0) {
+        const card = grid?.querySelector<HTMLElement>(`.recipe-card[data-recipe-id="${toRecipeId}"]`);
+        if (card) toggleRecipeSelection(card, toRecipeId);
+        return;
+    }
+
+    const fromIndex = visibleRecipeOrder.indexOf(lastSelectedRecipeId);
+    const toIndex = visibleRecipeOrder.indexOf(toRecipeId);
+
+    if (fromIndex < 0 || toIndex < 0) {
+        const card = grid?.querySelector<HTMLElement>(`.recipe-card[data-recipe-id="${toRecipeId}"]`);
+        if (card) toggleRecipeSelection(card, toRecipeId);
+        return;
+    }
+
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+
+    for (let index = start; index <= end; index += 1) {
+        const recipeId = visibleRecipeOrder[index];
+        selectedRecipeIds.add(recipeId);
+        const card = grid?.querySelector<HTMLElement>(`.recipe-card[data-recipe-id="${recipeId}"]`);
+        if (card) {
+            setCardSelectedState(card, true);
+        }
+    }
+
+    syncSelectionModeClass();
+
+    lastSelectedRecipeId = toRecipeId;
+    updateSelectionUI();
+}
+
+function normalizeTagInput(value: string): string {
+    return value.trim().toUpperCase();
+}
+
+function renderBulkTagChips() {
+    if (!bulkTagChips) return;
+
+    bulkTagChips.innerHTML = "";
+    const MAX_VISIBLE_TAGS = 0;
+    const MAX_TAG_LENGTH = window.innerWidth <= 600 ? 5 : 12;
+    const visibleTags = bulkPendingTags.slice(0, MAX_VISIBLE_TAGS);
+    const hiddenTags = bulkPendingTags.slice(MAX_VISIBLE_TAGS);
+
+    visibleTags.forEach((tag, index) => {
+        const chip = document.createElement("div");
+        chip.className = "bulk-tag-chip search-badge";
+        const displayTag =
+            tag.length > MAX_TAG_LENGTH
+                ? `${tag.substring(0, MAX_TAG_LENGTH)}...`
+                : tag;
+        chip.innerHTML = `
+            <span title="${tag}">${displayTag}</span>
+            <button data-index="${index}" title="Remove tag">
+                ${feather.icons["x"]?.toSvg({ width: 12, height: 12 }) || "x"}
+            </button>
+        `;
+        chip.querySelector("button")?.addEventListener("click", () => {
+            bulkPendingTags.splice(index, 1);
+            renderBulkTagChips();
+            refreshBulkTagSuggestions();
+            if (bulkTagApplyBtn) {
+                bulkTagApplyBtn.disabled = bulkPendingTags.length === 0;
+            }
+        });
+        bulkTagChips.appendChild(chip);
+    });
+
+    if (hiddenTags.length > 0) {
+        const moreBadge = document.createElement("div");
+        moreBadge.className = "more-badge";
+        moreBadge.innerHTML = `+${hiddenTags.length}`;
+        moreBadge.title = "Click to see more tags";
+
+        const popover = document.createElement("div");
+        popover.className = "more-tags-popover hidden";
+
+        hiddenTags.forEach((tag, hiddenIdx) => {
+            const realIdx = MAX_VISIBLE_TAGS + hiddenIdx;
+            const item = document.createElement("div");
+            item.className = "more-tag-item";
+            item.innerHTML = `
+                <span title="${tag}">${tag}</span>
+                <button title="Remove tag">
+                    ${feather.icons["x"]?.toSvg({ width: 12, height: 12 }) || "x"}
+                </button>
+            `;
+            item.querySelector("button")?.addEventListener("click", (event) => {
+                event.stopPropagation();
+                bulkPendingTags.splice(realIdx, 1);
+                renderBulkTagChips();
+                refreshBulkTagSuggestions();
+                if (bulkTagApplyBtn) {
+                    bulkTagApplyBtn.disabled = bulkPendingTags.length === 0;
+                }
+            });
+            popover.appendChild(item);
+        });
+
+        moreBadge.addEventListener("click", (event) => {
+            event.stopPropagation();
+            popover.classList.toggle("hidden");
+        });
+
+        moreBadge.appendChild(popover);
+        bulkTagChips.appendChild(moreBadge);
+    }
+}
+
+function renderBulkTagSuggestions() {
+    if (!bulkTagSuggestionsEl) return;
+
+    if (bulkTagSuggestions.length === 0) {
+        bulkTagSuggestionsEl.classList.add("hidden");
+        return;
+    }
+
+    bulkTagSuggestionsEl.innerHTML = "";
+    const closeRow = document.createElement("div");
+    closeRow.className = "suggestion-close-row";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "suggestion-close-btn";
+    closeBtn.setAttribute("aria-label", "Close suggestions");
+    closeBtn.innerHTML = feather.icons["x"]?.toSvg({ width: 14, height: 14 }) || "x";
+    closeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        hideBulkTagSuggestions();
+        bulkTagInput?.blur();
+    });
+    closeRow.appendChild(closeBtn);
+    bulkTagSuggestionsEl.appendChild(closeRow);
+
+    const typed = normalizeTagInput(bulkTagInput?.value || "");
+    bulkTagSuggestions.forEach((tag, index) => {
+        const option = document.createElement("div");
+        option.className =
+            "bulk-tag-suggestion suggestion-item" +
+            (index === bulkTagSuggestionIndex ? " selected" : "");
+        if (typed && tag.startsWith(typed)) {
+            const prefix = tag.slice(0, typed.length);
+            const suffix = tag.slice(typed.length);
+            option.innerHTML = `<span class="suggest-tag-match">${prefix}</span>${suffix}`;
+        } else {
+            option.textContent = tag;
+        }
+        option.addEventListener("click", () => {
+            addBulkPendingTag(tag);
+        });
+        bulkTagSuggestionsEl.appendChild(option);
+    });
+
+    bulkTagSuggestionsEl.classList.remove("hidden");
+}
+
+function hideBulkTagSuggestions() {
+    bulkTagSuggestions = [];
+    bulkTagSuggestionIndex = -1;
+    bulkTagSuggestionsEl?.classList.add("hidden");
+}
+
+function refreshBulkTagSuggestions() {
+    const typed = normalizeTagInput(bulkTagInput?.value || "");
+    bulkTagSuggestions = Array.from(allKnownTags)
+        .filter((tag) => !bulkPendingTags.includes(tag) && tag.startsWith(typed))
+        .sort((a, b) => a.localeCompare(b));
+    bulkTagSuggestionIndex = bulkTagSuggestions.length > 0 ? 0 : -1;
+    renderBulkTagSuggestions();
+}
+
+function addBulkPendingTag(tagValue: string) {
+    const tag = normalizeTagInput(tagValue);
+    if (!tag || bulkPendingTags.includes(tag)) {
+        if (bulkTagInput) bulkTagInput.value = "";
+        refreshBulkTagSuggestions();
+        return;
+    }
+
+    bulkPendingTags.push(tag);
+    bulkPendingTags.sort((a, b) => a.localeCompare(b));
+
+    if (bulkTagInput) bulkTagInput.value = "";
+    renderBulkTagChips();
+    refreshBulkTagSuggestions();
+    if (bulkTagApplyBtn) {
+        bulkTagApplyBtn.disabled = bulkPendingTags.length === 0;
+    }
+}
+
+function openBulkTagEditor() {
+    isBulkTagEditorOpen = true;
+    bulkTagEditor?.classList.remove("hidden");
+    bulkActionBar?.classList.add("tag-editor-open");
+    bulkPendingTags = [];
+    renderBulkTagChips();
+    refreshBulkTagSuggestions();
+    if (bulkTagApplyBtn) {
+        bulkTagApplyBtn.disabled = true;
+    }
+    bulkTagInput?.focus();
+}
+
+function closeBulkTagEditor() {
+    isBulkTagEditorOpen = false;
+    bulkTagEditor?.classList.add("hidden");
+    bulkActionBar?.classList.remove("tag-editor-open");
+    bulkPendingTags = [];
+    if (bulkTagInput) {
+        bulkTagInput.value = "";
+    }
+    renderBulkTagChips();
+    hideBulkTagSuggestions();
+    if (bulkTagApplyBtn) {
+        bulkTagApplyBtn.disabled = true;
+    }
+}
+
+async function applyBulkTags(tagsToApply: string[]) {
+    if (tagsToApply.length === 0 || selectedRecipeIds.size === 0) return;
+
+    const allRecipes = await getAllRecipes();
+    const recipeMap = new Map(allRecipes.map((recipe) => [recipe.id, recipe]));
+
+    const selectedRecipes = Array.from(selectedRecipeIds)
+        .map((id) => recipeMap.get(id))
+        .filter((recipe): recipe is Recipe => !!recipe);
+
+    await Promise.all(
+        selectedRecipes.map(async (recipe) => {
+            const tags = new Set((recipe.tags || []).map((tag) => tag.toUpperCase()));
+            tagsToApply.forEach((tag) => tags.add(tag));
+            recipe.tags = Array.from(tags).sort((a, b) => a.localeCompare(b));
+            await saveRecipeLocally(recipe);
+        })
+    );
+
+    closeBulkTagEditor();
+    resetSelection();
+    await loadRecipes();
+}
+
+async function handleBulkDelete() {
+    if (selectedRecipeIds.size === 0) return;
+    const confirmed = window.confirm(
+        `Delete ${selectedRecipeIds.size} selected recipe${selectedRecipeIds.size !== 1 ? "s" : ""}?`
+    );
+    if (!confirmed) return;
+
+    const ids = Array.from(selectedRecipeIds);
+    await Promise.all(ids.map((id) => deleteRecipe(id)));
+    resetSelection();
+    await loadRecipes();
+}
+
+async function handleBulkTag() {
+    if (selectedRecipeIds.size === 0) return;
+    if (isBulkTagEditorOpen) {
+        closeBulkTagEditor();
+        return;
+    }
+    openBulkTagEditor();
+}
+
+async function handleBulkShare() {
+    if (selectedRecipeIds.size === 0) return;
+
+    const allRecipes = await getAllRecipes();
+    const recipeMap = new Map(allRecipes.map((recipe) => [recipe.id, recipe]));
+    const selectedRecipes = Array.from(selectedRecipeIds)
+        .map((id) => recipeMap.get(id))
+        .filter((recipe): recipe is Recipe => !!recipe);
+
+    const shareLines = selectedRecipes.map((recipe) =>
+        recipe.url ? `${recipe.title} — ${recipe.url}` : recipe.title
+    );
+    const shareText = shareLines.join("\n");
+
+    try {
+        await navigator.clipboard.writeText(shareText);
+        alert("Copied selected recipes to clipboard.");
+    } catch {
+        alert("Unable to copy automatically. Please copy from the next prompt.");
+        window.prompt("Share selected recipes", shareText);
+    }
+}
+
+function wireSelectionControls() {
+    bulkDeleteBtn?.addEventListener("click", async () => {
+        await handleBulkDelete();
+    });
+
+    bulkTagBtn?.addEventListener("click", async () => {
+        await handleBulkTag();
+    });
+
+    bulkShareBtn?.addEventListener("click", async () => {
+        await handleBulkShare();
+    });
+
+    bulkTagCancelBtn?.addEventListener("click", () => {
+        closeBulkTagEditor();
+    });
+
+    bulkTagApplyBtn?.addEventListener("click", async () => {
+        await applyBulkTags([...bulkPendingTags]);
+    });
+
+    bulkTagInput?.addEventListener("input", () => {
+        const text = bulkTagInput.value;
+        const delimiterMatch = text.match(/[, ]$/);
+        const term = normalizeTagInput(text);
+        if (delimiterMatch && term) {
+            addBulkPendingTag(term);
+            return;
+        }
+        refreshBulkTagSuggestions();
+    });
+
+    bulkTagInput?.addEventListener("focus", () => {
+        refreshBulkTagSuggestions();
+    });
+
+    bulkTagInput?.addEventListener("click", () => {
+        refreshBulkTagSuggestions();
+    });
+
+    bulkTagInput?.addEventListener("keydown", async (event: KeyboardEvent) => {
+        if (event.key === "Tab") {
+            if (bulkTagSuggestions.length > 0) {
+                event.preventDefault();
+                const index = bulkTagSuggestionIndex >= 0 ? bulkTagSuggestionIndex : 0;
+                addBulkPendingTag(bulkTagSuggestions[index]);
+            }
+            return;
+        }
+
+        if (event.key === "ArrowDown" && bulkTagSuggestions.length > 0) {
+            event.preventDefault();
+            bulkTagSuggestionIndex = (bulkTagSuggestionIndex + 1) % bulkTagSuggestions.length;
+            renderBulkTagSuggestions();
+            return;
+        }
+
+        if (event.key === "ArrowUp" && bulkTagSuggestions.length > 0) {
+            event.preventDefault();
+            bulkTagSuggestionIndex =
+                bulkTagSuggestionIndex <= 0
+                    ? bulkTagSuggestions.length - 1
+                    : bulkTagSuggestionIndex - 1;
+            renderBulkTagSuggestions();
+            return;
+        }
+
+        if (event.key === "Enter") {
+            event.preventDefault();
+            if (bulkTagSuggestions.length > 0 && bulkTagSuggestionIndex >= 0) {
+                addBulkPendingTag(bulkTagSuggestions[bulkTagSuggestionIndex]);
+                return;
+            }
+
+            const raw = bulkTagInput?.value || "";
+            if (raw.trim().length > 0) {
+                addBulkPendingTag(raw);
+                return;
+            }
+
+            if (bulkPendingTags.length > 0) {
+                await applyBulkTags([...bulkPendingTags]);
+            }
+            return;
+        }
+
+        if (event.key === "Backspace" && (bulkTagInput?.value || "") === "" && bulkPendingTags.length > 0) {
+            bulkPendingTags.pop();
+            renderBulkTagChips();
+            refreshBulkTagSuggestions();
+            if (bulkTagApplyBtn) {
+                bulkTagApplyBtn.disabled = bulkPendingTags.length === 0;
+            }
+            return;
+        }
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+            if (!bulkTagSuggestionsEl?.classList.contains("hidden")) {
+                hideBulkTagSuggestions();
+            } else {
+                closeBulkTagEditor();
+            }
+        }
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!isBulkTagEditorOpen) return;
+        const target = event.target as Node;
+        if (
+            bulkTagEditor?.contains(target) ||
+            bulkTagBtn?.contains(target)
+        ) {
+            return;
+        }
+        bulkTagEditor
+            ?.querySelectorAll<HTMLElement>(".more-tags-popover")
+            .forEach((popover) => popover.classList.add("hidden"));
+        hideBulkTagSuggestions();
+    });
+
+    document.addEventListener("keydown", (event: KeyboardEvent) => {
+        if (event.key === "Escape" && isBulkTagEditorOpen) {
+            event.preventDefault();
+            closeBulkTagEditor();
+            return;
+        }
+
+        if (event.key === "Escape" && isSelectionMode) {
+            event.preventDefault();
+            resetSelection();
+            return;
+        }
+
+    });
+
+    updateSelectionUI();
+}
 
 // ─── Extraction live-update listener ────────────────────────────────────────
 
@@ -346,8 +851,8 @@ function renderSearchBadges() {
     if (!searchBadgesContainer) return;
     searchBadgesContainer.innerHTML = "";
 
-    const MAX_VISIBLE_TAGS = 2;
-    const MAX_TAG_LENGTH = 12;
+    const MAX_VISIBLE_TAGS = window.innerWidth <= 600 ? 1 : 2;
+    const MAX_TAG_LENGTH = window.innerWidth <= 600 ? 5 : 12;
 
     const visibleTags = currentTagFilters.slice(0, MAX_VISIBLE_TAGS);
     const hiddenTags = currentTagFilters.slice(MAX_VISIBLE_TAGS);
@@ -434,6 +939,20 @@ function renderSuggestions() {
     }
 
     searchSuggestions.innerHTML = "";
+    const closeRow = document.createElement("div");
+    closeRow.className = "suggestion-close-row";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "suggestion-close-btn";
+    closeBtn.setAttribute("aria-label", "Close suggestions");
+    closeBtn.innerHTML = feather.icons["x"]?.toSvg({ width: 14, height: 14 }) || "x";
+    closeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        hideSuggestions();
+        searchInput?.blur();
+    });
+    closeRow.appendChild(closeBtn);
+    searchSuggestions.appendChild(closeRow);
+
     const lowerInput = searchInput.value.trim().toLowerCase();
 
     currentSuggestions.forEach((tag, idx) => {
@@ -533,6 +1052,20 @@ async function loadRecipes() {
 
 function renderRecipes(recipes: Recipe[]) {
     if (!grid || !emptyState) return;
+
+    visibleRecipeOrder = recipes.map((recipe) => recipe.id);
+
+    const visibleIds = new Set(recipes.map((recipe) => recipe.id));
+    Array.from(selectedRecipeIds).forEach((id) => {
+        if (!visibleIds.has(id)) {
+            selectedRecipeIds.delete(id);
+        }
+    });
+    if (selectedRecipeIds.size === 0 && isSelectionMode) {
+        isSelectionMode = false;
+        syncSelectionModeClass();
+    }
+
     grid.innerHTML = "";
 
     // Render active extraction placeholders first.
@@ -565,6 +1098,8 @@ function renderRecipes(recipes: Recipe[]) {
     recipes.forEach((recipe: Recipe, index: number) => {
         const card = document.createElement("div");
         card.className = "card recipe-card";
+        card.dataset.recipeId = recipe.id;
+        card.setAttribute("role", "button");
 
         const isNew = recipe.createdAt && Date.now() - recipe.createdAt < 6000;
         if (isNew) card.classList.add("highlight-new");
@@ -573,6 +1108,7 @@ function renderRecipes(recipes: Recipe[]) {
 
         card.innerHTML = buildRecipeCardHtml(recipe);
         wireCardEvents(card, recipe);
+        setCardSelectedState(card, selectedRecipeIds.has(recipe.id));
         grid.appendChild(card);
     });
 
@@ -592,12 +1128,30 @@ function renderRecipes(recipes: Recipe[]) {
             }
         });
     });
+
+    updateSelectionUI();
 }
 
 function wireCardEvents(card: HTMLElement, recipe: Recipe) {
     // Clicking the card navigates to the detail view
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (event: MouseEvent) => {
+        const isShiftClick = event.shiftKey;
+
+        if (isShiftClick) {
+            selectRecipeRange(recipe.id);
+            return;
+        }
+
+        if (isSelectionMode) {
+            toggleRecipeSelection(card, recipe.id);
+            return;
+        }
         window.location.href = `recipe.html?id=${recipe.id}`;
+    });
+
+    card.querySelector(".select-indicator")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleRecipeSelection(card, recipe.id);
     });
 
     // Source link should not bubble to the card click handler
@@ -640,21 +1194,6 @@ function wireCardEvents(card: HTMLElement, recipe: Recipe) {
         await loadRecipes();
     });
 
-    // Delete — removes from DB and cleans up empty-state
-    card.querySelector(".delete-btn")?.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const id = (e.currentTarget as HTMLButtonElement).dataset.id!;
-        await deleteRecipe(id);
-        card.remove();
-
-        const remaining = grid!.querySelectorAll(".recipe-card").length;
-        if (recipeCountEl)
-            recipeCountEl.textContent = `${remaining} recipe${remaining !== 1 ? "s" : ""}`;
-        if (remaining === 0) {
-            grid!.classList.add("hidden");
-            emptyState!.classList.remove("hidden");
-        }
-    });
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -667,7 +1206,6 @@ async function handleSearch() {
     }
 
     searchBtn.disabled = true;
-    searchBtn.textContent = "Searching...";
 
     try {
         const lower = query.toLowerCase();
@@ -732,7 +1270,6 @@ async function handleSearch() {
         console.error("Search error:", err);
     } finally {
         searchBtn.disabled = false;
-        searchBtn.textContent = "Search";
     }
 }
 
@@ -863,6 +1400,7 @@ function wireSearchHandlers() {
         }
         if (e.key === "Escape") {
             hideSuggestions();
+            searchInput.blur();
         }
     });
 

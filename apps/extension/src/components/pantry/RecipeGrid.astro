@@ -14,3 +14,21 @@ const emptyIcon = feather.icons["book-open"].toSvg({ width: 48, height: 48 });
     <h3>Your pantry is empty</h3>
     <p>Extract recipes from the web using the Pantry Clip extension panel.</p>
 </div>
+
+<div id="bulk-action-bar" class="bulk-action-bar" aria-live="polite">
+    <span id="bulk-selected-count" class="bulk-selected-count">0 recipes selected</span>
+    <div class="bulk-action-buttons">
+        <button id="bulk-tag-btn" class="bulk-action-btn" title="Add tag">Tag</button>
+        <button id="bulk-share-btn" class="bulk-action-btn" title="Share">Share</button>
+        <button id="bulk-delete-btn" class="bulk-action-btn danger" title="Delete selected">Delete</button>
+    </div>
+    <div id="bulk-tag-editor" class="bulk-tag-editor hidden">
+        <div class="bulk-tag-input-wrap">
+            <div id="bulk-tag-chips" class="bulk-tag-chips"></div>
+            <input id="bulk-tag-input" type="text" placeholder="Type tags..." autocomplete="off" />
+            <div id="bulk-tag-suggestions" class="bulk-tag-suggestions hidden"></div>
+        </div>
+        <button id="bulk-tag-apply" class="bulk-action-btn" title="Apply tags">Apply</button>
+        <button id="bulk-tag-cancel" class="bulk-action-btn" title="Cancel tag edit">Cancel</button>
+    </div>
+</div>

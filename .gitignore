@@ -5,6 +5,7 @@ dist/
 *.log
 .temp/
 my-pantry.zip
+.pytest_cache/
 
 # dependencies
 node_modules/
