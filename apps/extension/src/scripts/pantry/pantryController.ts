@@ -53,6 +53,14 @@ const bulkTagChips = document.getElementById("bulk-tag-chips");
 const bulkTagSuggestionsEl = document.getElementById("bulk-tag-suggestions");
 const bulkTagApplyBtn = document.getElementById("bulk-tag-apply") as HTMLButtonElement | null;
 const bulkTagCancelBtn = document.getElementById("bulk-tag-cancel") as HTMLButtonElement | null;
+const shareConfirmOverlay = document.getElementById("share-confirm-overlay");
+const shareConfirmList = document.getElementById("share-confirm-list");
+const shareConfirmCancelBtn = document.getElementById("share-confirm-cancel");
+const shareConfirmContinueBtn = document.getElementById("share-confirm-continue") as HTMLButtonElement | null;
+const shareLinksOverlay = document.getElementById("share-links-overlay");
+const shareLinksList = document.getElementById("share-links-list");
+const shareLinksCloseBtn = document.getElementById("share-links-close");
+const pantryToastEl = document.getElementById("pantry-toast");
 
 // ─── Page state ───────────────────────────────────────────────────────────────
 
@@ -566,6 +574,132 @@ async function applyBulkTags(tagsToApply: string[]) {
     await loadRecipes();
 }
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showToast(message: string, type: "success" | "error" | "info" = "info", duration = 3500) {
+    const el = pantryToastEl;
+    if (!el) return;
+
+    if (toastTimer) clearTimeout(toastTimer);
+
+    el.textContent = message;
+    el.className = `pantry-toast toast-${type}`;
+
+    toastTimer = setTimeout(() => {
+        el.classList.add("hidden");
+        toastTimer = null;
+    }, duration);
+}
+
+// ─── Share Links Modal ────────────────────────────────────────────────────────
+
+function showShareLinksModal(urls: string[]) {
+    if (!shareLinksOverlay || !shareLinksList || !shareLinksCloseBtn) return;
+
+    shareLinksList.innerHTML = "";
+    for (const url of urls) {
+        const row = document.createElement("div");
+        row.className = "share-link-row";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.readOnly = true;
+        input.value = url;
+        input.addEventListener("click", () => input.select());
+
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "share-link-copy";
+        copyBtn.textContent = "Copy";
+        copyBtn.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(url);
+                copyBtn.textContent = "Copied!";
+                copyBtn.classList.add("copied");
+                setTimeout(() => {
+                    copyBtn.textContent = "Copy";
+                    copyBtn.classList.remove("copied");
+                }, 2000);
+            } catch {
+                input.select();
+            }
+        });
+
+        row.appendChild(input);
+        row.appendChild(copyBtn);
+        shareLinksList.appendChild(row);
+    }
+
+    shareLinksOverlay.classList.remove("hidden");
+
+    const close = () => {
+        shareLinksOverlay.classList.add("hidden");
+        shareLinksCloseBtn.removeEventListener("click", close);
+        shareLinksOverlay.removeEventListener("click", onOverlay);
+        document.removeEventListener("keydown", onKey);
+    };
+    const onOverlay = (e: MouseEvent) => { if (e.target === shareLinksOverlay) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+
+    shareLinksCloseBtn.addEventListener("click", close);
+    shareLinksOverlay.addEventListener("click", onOverlay);
+    document.addEventListener("keydown", onKey);
+}
+
+function confirmShareModal(initialIds: string[], initialTitles: string[]): Promise<string[]> {
+    return new Promise((resolve) => {
+        const overlay = shareConfirmOverlay;
+        const list = shareConfirmList;
+        const cancelBtn = shareConfirmCancelBtn;
+        const continueBtn = shareConfirmContinueBtn;
+        if (!overlay || !list || !cancelBtn || !continueBtn) {
+            resolve(initialIds);
+            return;
+        }
+
+        const xIcon = feather.icons["x"]?.toSvg({ width: 14, height: 14 }) ?? "×";
+        const pending = new Map<string, string>(initialIds.map((id, i) => [id, initialTitles[i]]));
+
+        const renderList = () => {
+            list.innerHTML = "";
+            pending.forEach((title, id) => {
+                const li = document.createElement("li");
+                li.dataset.id = id;
+                li.innerHTML = `<span>${title}</span><button class="delete-list-remove" title="Remove from list">${xIcon}</button>`;
+                li.querySelector("button")!.addEventListener("click", () => {
+                    pending.delete(id);
+                    if (pending.size === 0) { onCancel(); return; }
+                    renderList();
+                    continueBtn.textContent = `Share ${pending.size}`;
+                });
+                list.appendChild(li);
+            });
+        };
+
+        renderList();
+        continueBtn.textContent = `Share ${pending.size}`;
+        overlay.classList.remove("hidden");
+
+        const cleanup = () => {
+            overlay.classList.add("hidden");
+            cancelBtn.removeEventListener("click", onCancel);
+            continueBtn!.removeEventListener("click", onConfirm);
+            overlay.removeEventListener("click", onOverlayClick);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+        const onCancel = () => { cleanup(); resolve([]); };
+        const onConfirm = () => { cleanup(); resolve(Array.from(pending.keys())); };
+        const onOverlayClick = (e: MouseEvent) => { if (e.target === overlay) onCancel(); };
+        const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+
+        cancelBtn.addEventListener("click", onCancel);
+        continueBtn.addEventListener("click", onConfirm);
+        overlay.addEventListener("click", onOverlayClick);
+        document.addEventListener("keydown", onKeyDown);
+    });
+}
+
 function confirmDeleteModal(initialIds: string[], initialTitles: string[]): Promise<string[]> {
     return new Promise((resolve) => {
         const overlay = document.getElementById("delete-confirm-overlay");
@@ -649,23 +783,47 @@ async function handleBulkShare() {
     if (selectedRecipeIds.size === 0) return;
 
     const allRecipes = await getAllRecipes();
-    const recipeMap = new Map(allRecipes.map((recipe) => [recipe.id, recipe]));
-    const selectedRecipes = Array.from(selectedRecipeIds)
+    const recipeMap = new Map(allRecipes.map((r) => [r.id, r]));
+    const ids = Array.from(selectedRecipeIds);
+    const titles = ids.map((id) => recipeMap.get(id)?.title ?? id);
+
+    const toShare = await confirmShareModal(ids, titles);
+    if (toShare.length === 0) return;
+
+    const selected = toShare
         .map((id) => recipeMap.get(id))
-        .filter((recipe): recipe is Recipe => !!recipe);
+        .filter((r): r is Recipe => !!r);
 
-    const shareLines = selectedRecipes.map((recipe) =>
-        recipe.url ? `${recipe.title} — ${recipe.url}` : recipe.title
-    );
-    const shareText = shareLines.join("\n");
+    // Strip personal data (tags, embedding) before sending to the share API
+    const cleanRecipes = selected.map(({ embedding: _e, tags: _t, ...r }) => r);
 
-    try {
-        await navigator.clipboard.writeText(shareText);
-        alert("Copied selected recipes to clipboard.");
-    } catch {
-        alert("Unable to copy automatically. Please copy from the next prompt.");
-        window.prompt("Share selected recipes", shareText);
+    const res: { success: boolean; url?: string; error?: string } = await chrome.runtime.sendMessage({
+        type: "SHARE_RECIPE",
+        recipes: cleanRecipes,
+    });
+
+    if (!res.success) {
+        if (res.error === "not_authenticated") {
+            showToast("Sharing requires a cloud account — sign in with Google in Settings.", "error");
+        } else {
+            showToast("Failed to create share link. Please try again.", "error");
+        }
+        return;
     }
+
+    if (!res.url) {
+        showToast("No link was returned. Please try again.", "error");
+        return;
+    }
+
+    // Copy the share URL to clipboard silently, then show the links modal
+    try {
+        await navigator.clipboard.writeText(res.url);
+    } catch {
+        // Clipboard blocked — user can still manually copy from the modal
+    }
+
+    showShareLinksModal([res.url]);
 }
 
 function wireSelectionControls() {
@@ -798,9 +956,11 @@ function wireSelectionControls() {
 
         if (event.key === "Escape" && isSelectionMode) {
             event.preventDefault();
-            // Let the delete modal handle its own Escape first
+            // Let confirmation/result modals handle their own Escape first
             const deleteOverlay = document.getElementById("delete-confirm-overlay");
             if (deleteOverlay && !deleteOverlay.classList.contains("hidden")) return;
+            if (shareConfirmOverlay && !shareConfirmOverlay.classList.contains("hidden")) return;
+            if (shareLinksOverlay && !shareLinksOverlay.classList.contains("hidden")) return;
             resetSelection();
             return;
         }
@@ -816,6 +976,12 @@ function wireExtractionListener() {
     if (typeof chrome === "undefined" || !chrome.runtime?.onMessage) return;
 
     chrome.runtime.onMessage.addListener((message: any) => {
+        // A recipe was imported from a share page — reload the grid so it appears immediately
+        if (message.type === "RECIPE_SAVED_FROM_SHARE") {
+            loadRecipes();
+            return;
+        }
+
         if (message.type !== "EXTRACTION_STATUS_UPDATE") return;
 
         if (message.isComplete) {

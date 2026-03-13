@@ -15,6 +15,34 @@ const emptyIcon = feather.icons["book-open"].toSvg({ width: 48, height: 48 });
     <p>Extract recipes from the web using the Pantry Clip extension panel.</p>
 </div>
 
+<!-- Toast notification -->
+<div id="pantry-toast" class="pantry-toast hidden" role="status" aria-live="polite"></div>
+
+<!-- Share links result modal (shown after links are generated) -->
+<div id="share-links-overlay" class="delete-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="share-links-title">
+    <div class="delete-confirm-modal">
+        <h3 id="share-links-title">Recipe shared!</h3>
+        <p class="delete-confirm-subtitle">Anyone with the link can view this recipe. Links expire in 30 days.</p>
+        <div id="share-links-list" class="share-links-list"></div>
+        <div class="delete-confirm-actions">
+            <button id="share-links-close" class="delete-btn secondary">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- Share confirmation modal -->
+<div id="share-confirm-overlay" class="delete-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="share-confirm-title">
+    <div class="delete-confirm-modal">
+        <h3 id="share-confirm-title">Share recipes?</h3>
+        <p class="delete-confirm-subtitle">Each recipe below gets its own shareable link. Personal tags are removed before sharing.</p>
+        <ul id="share-confirm-list" class="delete-confirm-list"></ul>
+        <div class="delete-confirm-actions">
+            <button id="share-confirm-cancel" class="delete-btn secondary">Cancel</button>
+            <button id="share-confirm-continue" class="delete-btn danger">Share</button>
+        </div>
+    </div>
+</div>
+
 <!-- Delete confirmation modal -->
 <div id="delete-confirm-overlay" class="delete-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
     <div class="delete-confirm-modal">

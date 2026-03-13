@@ -494,6 +494,98 @@ body {
     }
 }
 
+// ── Toast Notifications ─────────────────────────────────────────────────────
+
+.pantry-toast {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 700;
+    background: var(--color-text);
+    color: var(--color-bg);
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    max-width: 320px;
+    box-shadow: 0 4px 20px rgba(74, 64, 54, 0.25);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+
+    &.hidden {
+        opacity: 0;
+        transform: translateY(-6px);
+        pointer-events: none;
+    }
+
+    &.toast-error {
+        background: #EF4444;
+        color: #fff;
+    }
+
+    &.toast-success {
+        background: #10B981;
+        color: #fff;
+    }
+}
+
+// ── Share Links List (inside share-links-overlay modal) ──────────────────────
+
+.share-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.share-link-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 6px 10px 6px 12px;
+
+    input {
+        flex: 1;
+        min-width: 0;
+        background: none;
+        border: none;
+        outline: none;
+        font-size: 0.82rem;
+        color: var(--color-text-muted);
+        font-family: monospace;
+        cursor: text;
+    }
+
+    .share-link-copy {
+        flex-shrink: 0;
+        background: none;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        font-family: var(--font-body);
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+
+        &:hover {
+            background: var(--color-accent);
+            color: #fff;
+            border-color: var(--color-accent);
+        }
+
+        &.copied {
+            background: #10B981;
+            color: #fff;
+            border-color: #10B981;
+        }
+    }
+}
+
 // ── Empty State ─────────────────────────────────────────────────────────────
 
 .empty-state {

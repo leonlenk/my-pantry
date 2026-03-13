@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.utils.logger import setup_logging
 from src.config import settings
-from src.routers import extract, substitute, auth, sync, privacy, home
+from src.routers import extract, substitute, auth, sync, privacy, home, share
 from loguru import logger
 import uvicorn
 import os
@@ -30,6 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         f"chrome-extension://{settings.extension_id}",
+        "https://mypantry.dev",
         "http://localhost",
         "http://127.0.0.1",
         "http://localhost:8000",
@@ -44,6 +45,7 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(extract.router)
 api_router.include_router(substitute.router)
 api_router.include_router(sync.router)
+api_router.include_router(share.api_router)
 api_router.include_router(auth.router, prefix="/oauth", tags=["oauth"])
 
 @api_router.get("/auth/callback", response_class=HTMLResponse)
@@ -96,6 +98,7 @@ def auth_callback():
     """
 
 app.include_router(api_router)
+app.include_router(share.public_router)
 app.include_router(privacy.router)
 app.include_router(home.router)
 

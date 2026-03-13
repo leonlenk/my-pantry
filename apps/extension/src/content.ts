@@ -52,6 +52,38 @@ if (window.location.hostname.includes('mypantry.dev') && window.location.pathnam
     }
 }
 
+// ─── Shared Recipe Import ─────────────────────────────────────────────────────
+// Active on mypantry.dev/s/* pages. Injects a hidden marker element so the page
+// JavaScript can detect the extension, then relays save requests from the page
+// to the background service worker for IndexedDB storage and embedding.
+if (
+    window.location.hostname === 'mypantry.dev' &&
+    window.location.pathname.startsWith('/s/')
+) {
+    // Inject detection marker — the page checks for this before wiring the save button.
+    const marker = document.createElement('div');
+    marker.id = '__mypantry_installed';
+    marker.style.display = 'none';
+    (document.body || document.documentElement).appendChild(marker);
+
+    window.addEventListener('message', (event) => {
+        if (event.origin !== 'https://mypantry.dev') return;
+        if (event.data?.type !== 'MYPANTRY_SAVE_RECIPE') return;
+
+        // Normalise: page JS sends { recipes: [...] }; support legacy { recipe: ... } too
+        const recipes = event.data.recipes ?? (event.data.recipe ? [event.data.recipe] : []);
+        chrome.runtime.sendMessage(
+            { type: 'IMPORT_SHARED_RECIPE', recipes },
+            (response) => {
+                window.postMessage(
+                    { type: 'MYPANTRY_SAVE_RESULT', success: response?.success ?? false },
+                    'https://mypantry.dev'
+                );
+            }
+        );
+    });
+}
+
 // ─── Tier 1: JSON-LD ──────────────────────────────────────────────────────────
 
 function checkJsonLd(): ExtractionResult | null {

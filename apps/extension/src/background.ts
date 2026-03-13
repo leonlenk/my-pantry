@@ -622,6 +622,97 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'SHARE_RECIPE') {
+        // Sends a batch of recipes to the backend /api/share endpoint.
+        // Caller must have stripped embedding/tags before sending.
+        (async () => {
+            try {
+                const stored = await chrome.storage.local.get(["supabaseToken", "llmProvider", "apiUrl"]);
+                if (stored.llmProvider !== "google" || !stored.supabaseToken) {
+                    sendResponse({ success: false, error: "not_authenticated" });
+                    return;
+                }
+                // Refresh the JWT proactively — same pattern as extraction — to avoid
+                // silent 401s from expired tokens without notifying the user.
+                const freshToken = await refreshSupabaseToken();
+                const token = freshToken ?? (stored.supabaseToken as string);
+
+                // apiUrl is stored with the /api prefix already (e.g. "https://mypantry.dev/api")
+                // to be consistent with how sync.ts constructs its paths.
+                const apiBase: string = (stored.apiUrl as string | undefined) ?? "http://127.0.0.1:8000";
+                const res = await fetch(`${apiBase}/share`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ recipes: message.recipes }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    sendResponse({ success: true, url: data.url });
+                } else {
+                    const text = await res.text().catch(() => res.status.toString());
+                    console.warn(`[Share] API error (${res.status}):`, text);
+                    sendResponse({ success: false, error: "api_error", status: res.status });
+                }
+            } catch (err: any) {
+                console.warn("[Share] Network error:", err?.message ?? err);
+                sendResponse({ success: false, error: "network_error" });
+            }
+        })();
+        return true;
+    }
+
+    if (message.type === 'IMPORT_SHARED_RECIPE') {
+        // Saves one or more recipes from a mypantry.dev/s/* share page into IndexedDB,
+        // generates embeddings, and syncs to cloud if authenticated.
+        // createdAt is stamped to now so imported recipes sort as "just added".
+        (async () => {
+            try {
+                const recipes: any[] = message.recipes ?? (message.recipe ? [message.recipe] : []);
+                const now = Date.now();
+
+                await setupOffscreenDocument();
+
+                for (const recipe of recipes) {
+                    recipe.createdAt = now;
+
+                    const textToEmbed = [
+                        recipe.title,
+                        recipe.description,
+                        ...(recipe.ingredients?.map((i: any) => i.item) || []),
+                    ].filter(Boolean).join(", ");
+
+                    const embeddingResult: { success: boolean; embedding?: number[]; error?: string } =
+                        await chrome.runtime.sendMessage({
+                            type: 'GENERATE_EMBEDDING',
+                            target: 'offscreen',
+                            text: textToEmbed,
+                        });
+
+                    if (embeddingResult?.success && embeddingResult.embedding) {
+                        recipe.embedding = embeddingResult.embedding;
+                    } else {
+                        console.warn("[Import] Embedding failed, saving without vector:", embeddingResult?.error);
+                    }
+
+                    await saveRecipeLocally(recipe);
+                    await syncRecipeToCloud(recipe);
+                }
+
+                // Notify the pantry page (if open) so it refreshes without a manual reload
+                chrome.runtime.sendMessage({ type: 'RECIPE_SAVED_FROM_SHARE' }).catch(() => {});
+
+                sendResponse({ success: true });
+            } catch (err: any) {
+                console.warn("[Import] Failed to import shared recipe:", err?.message ?? err);
+                sendResponse({ success: false });
+            }
+        })();
+        return true;
+    }
+
     if (message.type === 'CACHE_API_KEY') {
         const { apiKey } = message;
         // Cache for 1 hour
