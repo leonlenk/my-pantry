@@ -128,6 +128,48 @@
             white-space: nowrap;
             margin-left: 2px;
         }
+
+        .view-switcher {
+            display: flex;
+            align-items: center;
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+            height: 40px;
+            margin-left: var(--spacing-sm);
+
+            .view-mode-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 28px;
+                height: 28px;
+                border-radius: 5px;
+                border: none;
+                background: transparent;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                padding: 0;
+                transition: all 0.15s ease;
+                flex-shrink: 0;
+
+                svg {
+                    display: block;
+                }
+
+                &:hover {
+                    background: rgba(139, 115, 85, 0.08);
+                    color: var(--color-text);
+                }
+
+                &.active {
+                    background: var(--color-accent);
+                    color: white;
+                }
+            }
+        }
     }
 }
 
@@ -153,6 +195,29 @@
 
 @media (max-width: 600px) {
     .top-bar .top-row {
+        .left-section {
+            flex-wrap: wrap;
+            row-gap: var(--spacing-xs);
+
+            // Filters always on their own row
+            .filters {
+                flex-basis: 100%;
+                justify-content: center;
+            }
+
+            // Unit pref + label + view switcher share the second row, centered
+            .pantry-unit-dropdown,
+            .unit-pref-note,
+            .view-switcher {
+                flex-shrink: 0;
+            }
+
+            // Tighten left margin on view switcher when wrapping
+            .view-switcher {
+                margin-left: 4px;
+            }
+        }
+
         .filters .filter-btn {
             padding: 0 0.9rem;
             font-size: 0.85rem;
@@ -174,6 +239,15 @@
 
         .unit-pref-note {
             font-size: 0.64rem;
+        }
+
+        .view-switcher {
+            height: 36px;
+
+            .view-mode-btn {
+                width: 24px;
+                height: 24px;
+            }
         }
     }
 }

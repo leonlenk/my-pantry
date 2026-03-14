@@ -48,7 +48,13 @@ export function buildMetaHtml(recipe: Recipe): string {
  * Builds the content area (description + tags), optionally wrapped in a
  * flip-container when the recipe has a cover image.
  */
+function buildOverflowChip(overflowTags: string[]): string {
+    if (!overflowTags.length) return "";
+    return `<span class="tag tag-overflow" data-overflow-tags="${overflowTags.join("|")}">+${overflowTags.length}</span>`;
+}
+
 function buildContentHtml(recipe: Recipe): string {
+    const MAX_TAGS = 5;
     let domain = "";
     let domainTagHtml = "";
     if (recipe.url) {
@@ -58,20 +64,18 @@ function buildContentHtml(recipe: Recipe): string {
         } catch (e) { }
     }
 
-    const tagsHtml = recipe.tags
-        ? [...recipe.tags]
-            .sort((a, b) => a.localeCompare(b))
-            .filter(tag => tag !== domain)
-            .map((tag) => `<span class="tag">${tag}</span>`)
-            .join("")
-        : "";
+    const sortedTags = recipe.tags
+        ? [...recipe.tags].sort((a, b) => a.localeCompare(b)).filter(tag => tag !== domain)
+        : [];
+    const visibleTagsHtml = sortedTags.slice(0, MAX_TAGS).map((t) => `<span class="tag">${t}</span>`).join("");
+    const overflowChip = buildOverflowChip(sortedTags.slice(MAX_TAGS));
 
     const description = (recipe.description || "").slice(0, 140);
     const truncated = (recipe.description || "").length > 140 ? "..." : "";
 
     const innerHtml = `
         <p class="desc">${description}${truncated}</p>
-        <div class="tags">${domainTagHtml}${tagsHtml}</div>
+        <div class="tags">${domainTagHtml}${visibleTagsHtml}${overflowChip}</div>
     `;
 
     if (recipe.image) {
@@ -104,9 +108,9 @@ export function buildRecipeCardHtml(recipe: Recipe): string {
 
     return `
         <div class="card-header">
-            <h3>${recipe.title}</h3>
+            <h3 title="${recipe.title}">${recipe.title}</h3>
             <div class="card-actions">
-                <button class="favorite-btn ${recipe.isFavorite ? "is-favorite" : ""}" data-id="${recipe.id}" title="Toggle favorite">
+                <button class="favorite-btn ${recipe.isFavorite ? "is-favorite" : ""}" data-id="${recipe.id}" data-star-size="18" title="Toggle favorite">
                     ${starIcon}
                 </button>
                 <button class="select-indicator" data-id="${recipe.id}" aria-label="Select recipe">
@@ -126,6 +130,98 @@ export function buildRecipeCardHtml(recipe: Recipe): string {
             : ""
         }
         </div>
+    `;
+}
+
+/**
+ * Builds the compact card HTML for medium grid view.
+ * Shows image at top, title + meta + limited tags — no description, no flip.
+ */
+export function buildMediumCardHtml(recipe: Recipe): string {
+    const metaHtml = buildMetaHtml(recipe);
+    const checkIcon = safeIcon("check", { width: 12, height: 12 });
+    const starIcon = recipe.isFavorite
+        ? safeIcon("star", { width: 16, height: 16, fill: "currentColor" })
+        : safeIcon("star", { width: 16, height: 16 });
+
+    let domain = "";
+    let domainTagHtml = "";
+    if (recipe.url) {
+        try {
+            domain = new URL(recipe.url).hostname.replace(/^www\./, "").toUpperCase();
+            domainTagHtml = `<span class="tag domain-tag">${safeIcon("link", { width: 10, height: 10, style: "margin-right: 3px; vertical-align: -1px;" })}${domain}</span>`;
+        } catch (e) {}
+    }
+
+    const sortedTags = recipe.tags
+        ? [...recipe.tags].sort((a, b) => a.localeCompare(b)).filter((t) => t !== domain)
+        : [];
+    const MAX_TAGS = 3;
+    const visibleTagsHtml = sortedTags.slice(0, MAX_TAGS).map((t) => `<span class="tag">${t}</span>`).join("");
+    const overflowChip = buildOverflowChip(sortedTags.slice(MAX_TAGS));
+
+    const imageHtml = recipe.image
+        ? `<div class="medium-card-image"><img src="${recipe.image}" alt="${recipe.title} cover" loading="lazy" /></div>`
+        : "";
+
+    return `
+        ${imageHtml}
+        <div class="medium-card-body">
+            <div class="card-header">
+                <h3 title="${recipe.title}">${recipe.title}</h3>
+                <div class="card-actions">
+                    <button class="favorite-btn ${recipe.isFavorite ? "is-favorite" : ""}" data-id="${recipe.id}" data-star-size="16" title="Toggle favorite">${starIcon}</button>
+                    <button class="select-indicator" data-id="${recipe.id}" aria-label="Select recipe">${checkIcon}</button>
+                </div>
+            </div>
+            ${metaHtml ? `<div class="meta">${metaHtml}</div>` : ""}
+            <div class="tags">${domainTagHtml}${visibleTagsHtml}${overflowChip}</div>
+            ${recipe.url ? `<a href="${recipe.url}" target="_blank" class="view-btn">View Source →</a>` : ""}
+        </div>
+    `;
+}
+
+/**
+ * Builds the compact list-row HTML for small/list view.
+ * Single horizontal row: star | title | tags+overflow | source link.
+ */
+export function buildSmallCardHtml(recipe: Recipe): string {
+    const starIcon = recipe.isFavorite
+        ? safeIcon("star", { width: 14, height: 14, fill: "currentColor" })
+        : safeIcon("star", { width: 14, height: 14 });
+    const checkIcon = safeIcon("check", { width: 12, height: 12 });
+
+    let domain = "";
+    if (recipe.url) {
+        try {
+            domain = new URL(recipe.url).hostname.replace(/^www\./, "").toUpperCase();
+        } catch (e) {}
+    }
+
+    const allTags = recipe.tags
+        ? [...recipe.tags].sort((a, b) => a.localeCompare(b))
+        : [];
+    // In small view show only 2 non-domain tags; domain counts in overflow
+    const nonDomainTags = allTags.filter((t) => t !== domain);
+    const MAX_TAGS = 2;
+    const visibleTagsHtml = nonDomainTags.slice(0, MAX_TAGS).map((t) => `<span class="tag">${t}</span>`).join("");
+    // Overflow includes hidden non-domain tags + the domain tag
+    const overflowTags = [
+        ...nonDomainTags.slice(MAX_TAGS),
+        ...(domain ? [domain] : []),
+    ];
+    const overflowChip = buildOverflowChip(overflowTags);
+
+    const sourceLink = recipe.url
+        ? `<a href="${recipe.url}" target="_blank" class="small-card-source" title="View source">${safeIcon("external-link", { width: 13, height: 13 })}</a>`
+        : "";
+
+    return `
+        <button class="favorite-btn ${recipe.isFavorite ? "is-favorite" : ""}" data-id="${recipe.id}" data-star-size="14" title="Toggle favorite">${starIcon}</button>
+        <button class="select-indicator" data-id="${recipe.id}" aria-label="Select recipe">${checkIcon}</button>
+        <span class="small-card-title" title="${recipe.title}">${recipe.title}</span>
+        <div class="small-card-tags">${visibleTagsHtml}${overflowChip}</div>
+        ${sourceLink}
     `;
 }
 

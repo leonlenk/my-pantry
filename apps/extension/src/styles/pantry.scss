@@ -42,6 +42,16 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: var(--spacing-xl);
     align-content: start;
+
+    &.view-medium {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: var(--spacing-md);
+    }
+
+    &.view-small {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
 }
 
 .bulk-action-bar {
@@ -586,6 +596,36 @@ body {
     }
 }
 
+// ── Tag overflow popover (appended to body, position:fixed) ─────────────────
+
+.tag-overflow-popover {
+    position: fixed;
+    z-index: 9999;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 28px -4px rgba(74, 64, 54, 0.18);
+    padding: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 280px;
+    animation: fadeUp 0.12s ease;
+
+    .tag {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background-color: rgba(139, 115, 85, 0.08);
+        border: 1px solid rgba(139, 115, 85, 0.15);
+        padding: 4px 10px;
+        border-radius: 20px;
+        color: var(--color-accent);
+        white-space: nowrap;
+    }
+}
+
 // ── Empty State ─────────────────────────────────────────────────────────────
 
 .empty-state {
@@ -750,5 +790,24 @@ body:has(.search-bar-container) .scroll-top-btn {
 @media (max-width: 600px) {
     body:has(.search-bar-container) .scroll-top-btn {
         bottom: calc(110px + env(safe-area-inset-bottom)) !important;
+    }
+}
+
+// ── Bulk action bar active state ─────────────────────────────────────────────
+// Extra bottom padding so the last card isn't hidden behind the bulk bar
+
+body.selection-mode .content {
+    padding-bottom: calc(195px + env(safe-area-inset-bottom));
+}
+
+// On mobile the bar wraps to two rows so it's taller — need more clearance
+@media (max-width: 600px) {
+    body.selection-mode .content {
+        padding-bottom: calc(230px + env(safe-area-inset-bottom));
+    }
+
+    // Lift the scroll-to-top button above the bulk action bar on mobile
+    body.selection-mode:has(.search-bar-container) .scroll-top-btn {
+        bottom: calc(210px + env(safe-area-inset-bottom)) !important;
     }
 }

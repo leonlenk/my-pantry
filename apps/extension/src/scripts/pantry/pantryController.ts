@@ -24,6 +24,8 @@ import type { Recipe } from "../../types/recipe";
 import feather from "feather-icons";
 import {
     buildRecipeCardHtml,
+    buildMediumCardHtml,
+    buildSmallCardHtml,
     buildPlaceholderHtml,
     buildMetaHtml,
 } from "./cardRenderer";
@@ -66,6 +68,8 @@ const pantryToastEl = document.getElementById("pantry-toast");
 
 let currentFilter = localStorage.getItem("pantryFilter") || "all";
 const UNIT_PREFERENCE_KEY = "preferredUnitSystem";
+const VIEW_MODE_KEY = "pantryViewMode";
+let currentViewMode = localStorage.getItem(VIEW_MODE_KEY) || "large";
 let currentTagFilters: string[] = [];
 let currentSuggestions: string[] = [];
 let selectedSuggestionIndex = -1;
@@ -205,6 +209,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 
+    // View mode toggle
+    applyViewMode();
+    document.querySelectorAll<HTMLElement>(".view-mode-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            currentViewMode = btn.dataset.view || "large";
+            localStorage.setItem(VIEW_MODE_KEY, currentViewMode);
+            applyViewMode();
+            loadRecipes();
+        });
+    });
+
+    // Close overflow tag popover when clicking outside
+    document.addEventListener("click", () => closeTagPopover());
+
     if (unitPreferenceDropdown) {
         const storedUnitPreference = localStorage.getItem(UNIT_PREFERENCE_KEY);
         const selected = storedUnitPreference === "metric" ? "metric" : "us";
@@ -272,6 +290,50 @@ document.addEventListener("DOMContentLoaded", async () => {
         requestAnimationFrame(() => document.body.classList.add("page-ready"))
     );
 });
+
+function applyViewMode() {
+    if (!grid) return;
+    grid.classList.remove("view-large", "view-medium", "view-small");
+    grid.classList.add(`view-${currentViewMode}`);
+    document.querySelectorAll<HTMLElement>(".view-mode-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.view === currentViewMode);
+    });
+}
+
+// ── Tag overflow popover ──────────────────────────────────────────────────────
+
+let activePopoverAnchor: HTMLElement | null = null;
+
+function showTagPopover(anchor: HTMLElement, tags: string[]) {
+    closeTagPopover();
+    activePopoverAnchor = anchor;
+
+    const popover = document.createElement("div");
+    popover.className = "tag-overflow-popover";
+    popover.innerHTML = tags.map((t) => `<span class="tag">${t}</span>`).join("");
+    document.body.appendChild(popover);
+
+    // Position after paint so getBoundingClientRect is accurate
+    requestAnimationFrame(() => {
+        const anchorRect = anchor.getBoundingClientRect();
+        const popRect = popover.getBoundingClientRect();
+        let top = anchorRect.top - popRect.height - 8;
+        let left = anchorRect.left + anchorRect.width / 2 - popRect.width / 2;
+
+        // Flip below if not enough room above
+        if (top < 8) top = anchorRect.bottom + 8;
+        // Keep within horizontal viewport
+        left = Math.max(8, Math.min(left, window.innerWidth - popRect.width - 8));
+
+        popover.style.top = `${top}px`;
+        popover.style.left = `${left}px`;
+    });
+}
+
+function closeTagPopover() {
+    document.querySelectorAll(".tag-overflow-popover").forEach((p) => p.remove());
+    activePopoverAnchor = null;
+}
 
 function syncSelectionModeClass() {
     isSelectionMode = selectedRecipeIds.size > 0;
@@ -1332,7 +1394,13 @@ function renderRecipes(recipes: Recipe[]) {
 
         (card.style as any).viewTransitionName = `card-${recipe.id}`;
 
-        card.innerHTML = buildRecipeCardHtml(recipe);
+        if (currentViewMode === "small") {
+            card.innerHTML = buildSmallCardHtml(recipe);
+        } else if (currentViewMode === "medium") {
+            card.innerHTML = buildMediumCardHtml(recipe);
+        } else {
+            card.innerHTML = buildRecipeCardHtml(recipe);
+        }
         wireCardEvents(card, recipe);
         setCardSelectedState(card, selectedRecipeIds.has(recipe.id));
         grid.appendChild(card);
@@ -1380,9 +1448,26 @@ function wireCardEvents(card: HTMLElement, recipe: Recipe) {
         toggleRecipeSelection(card, recipe.id);
     });
 
-    // Source link should not bubble to the card click handler
+    // Source links should not bubble to the card click handler
     card.querySelector(".view-btn")?.addEventListener("click", (e) => {
         e.stopPropagation();
+    });
+    card.querySelector(".small-card-source")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+    });
+
+    // Tag overflow chips — show popover with hidden tags
+    card.querySelectorAll<HTMLElement>(".tag-overflow").forEach((chip) => {
+        chip.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const tags = chip.dataset.overflowTags?.split("|").filter(Boolean) ?? [];
+            if (!tags.length) return;
+            if (activePopoverAnchor === chip) {
+                closeTagPopover();
+            } else {
+                showTagPopover(chip, tags);
+            }
+        });
     });
 
     // Mobile image preview: the .preview-toggle-btn is shown only on touch devices
@@ -1406,13 +1491,14 @@ function wireCardEvents(card: HTMLElement, recipe: Recipe) {
         const btn = e.currentTarget as HTMLButtonElement;
         btn.classList.toggle("is-favorite", recipe.isFavorite);
 
+        const starSize = parseInt(btn.dataset.starSize || "18", 10);
         const featherIcon = recipe.isFavorite
             ? (feather.icons["star"] as any)?.toSvg({
-                width: 18,
-                height: 18,
+                width: starSize,
+                height: starSize,
                 fill: "currentColor",
             })
-            : (feather.icons["star"] as any)?.toSvg({ width: 18, height: 18 });
+            : (feather.icons["star"] as any)?.toSvg({ width: starSize, height: starSize });
         if (featherIcon) btn.innerHTML = featherIcon;
 
         await saveRecipeLocally(recipe);
