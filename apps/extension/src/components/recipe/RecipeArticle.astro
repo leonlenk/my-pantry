@@ -3,7 +3,7 @@ import Dropdown from "../common/Dropdown.astro";
 import feather from "feather-icons";
 
 const editIcon =
-    feather.icons["edit-3"]?.toSvg({ width: 16, height: 16 }) || "";
+    feather.icons["edit-3"]?.toSvg({ width: 14, height: 14 }) || "";
 const sparkleIcon =
     feather.icons["zap"]?.toSvg({ width: 16, height: 16 }) || "";
 const listIcon = feather.icons["list"]?.toSvg({ width: 16, height: 16 }) || "";
@@ -19,15 +19,9 @@ const listIcon = feather.icons["list"]?.toSvg({ width: 16, height: 16 }) || "";
 
 <article id="recipe-article" class="recipe-article hidden">
     <header class="article-header" id="recipe-display-header">
-        <div
-            class="title-row"
-            style="display: flex; justify-content: center; align-items: center; gap: var(--spacing-sm); margin-bottom: var(--spacing-md);"
-        >
-            <div
-                class="title-container"
-                style="position: relative; display: inline-block;"
-            >
-                <h1 id="recipe-title" style="margin: 0;"></h1>
+        <div class="title-row" style="margin-bottom: var(--spacing-md);">
+            <div class="title-container">
+                <h1 id="recipe-title"></h1>
                 <input
                     type="text"
                     id="recipe-title-input"
@@ -36,8 +30,9 @@ const listIcon = feather.icons["list"]?.toSvg({ width: 16, height: 16 }) || "";
                 <button
                     id="edit-title-btn"
                     class="title-pencil"
-                    title="Edit Title"
-                    set:html={editIcon}></button>
+                    title="Edit title"
+                    set:html={editIcon}
+                ></button>
             </div>
         </div>
         <div class="meta-tags" id="recipe-meta"></div>

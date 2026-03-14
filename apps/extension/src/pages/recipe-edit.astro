@@ -1,0 +1,34 @@
+---
+import "../styles/global.scss";
+import "../styles/recipe.scss";
+import RecipeEditForm from "../components/recipe/RecipeEditForm.astro";
+---
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>MyPantry - Edit Recipe</title>
+    </head>
+    <body>
+        <div class="recipe-layout">
+            <header class="top-bar">
+                <button class="btn outline" id="cancel-edit-btn"
+                    >← Cancel</button
+                >
+                <button class="btn primary" id="save-edit-btn"
+                    >Save Changes</button
+                >
+            </header>
+
+            <main class="content" id="edit-content">
+                <RecipeEditForm />
+            </main>
+        </div>
+
+        <script>
+            import "../scripts/recipe/recipeEditController";
+        </script>
+    </body>
+</html>

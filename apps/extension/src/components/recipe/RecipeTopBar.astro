@@ -10,6 +10,9 @@ const sparkleIcon =
 <header class="top-bar">
     <button class="btn outline" id="back-btn">← Back to Pantry</button>
     <div class="top-bar-actions" style="display: flex; gap: var(--spacing-sm);">
+        <button id="edit-recipe-btn" class="btn outline hidden">
+            <span set:html={editIcon}></span> Edit Recipe
+        </button>
         <a href="#" target="_blank" id="source-link" class="btn primary hidden"
             >View Source</a
         >

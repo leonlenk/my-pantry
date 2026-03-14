@@ -39,6 +39,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.location.href = "pantry.html";
     });
 
+    const editRecipeBtn = document.getElementById("edit-recipe-btn") as HTMLButtonElement;
+    if (editRecipeBtn && recipeId) {
+        editRecipeBtn.classList.remove("hidden");
+        editRecipeBtn.addEventListener("click", () => {
+            window.location.href = `recipe-edit.html?id=${recipeId}`;
+        });
+    }
+
     if (!recipeId) {
         showError();
         return;
@@ -106,8 +114,6 @@ function wireTitleEdit() {
             recipe.title = newTitle;
             titleHeading.textContent = newTitle;
             await saveRecipeLocally(recipe);
-        } else {
-            titleInput.value = recipe.title || "";
         }
         titleInput.classList.add("hidden");
         titleHeading.classList.remove("hidden");

@@ -9,23 +9,6 @@
     .title-container {
         position: relative;
         display: inline-block;
-
-        .title-pencil {
-            position: absolute;
-            top: -5px;
-            right: -25px;
-            background: none;
-            border: none;
-            font-size: 1rem;
-            cursor: pointer;
-            opacity: 0.4;
-            transition: opacity 0.2s ease;
-            padding: 0;
-
-            &:hover {
-                opacity: 0.8;
-            }
-        }
     }
 
     h1,
@@ -34,8 +17,8 @@
         margin-bottom: 0;
         color: var(--color-text);
         letter-spacing: -0.03em;
-        font-family: inherit;
-        font-weight: bold;
+        font-family: var(--font-serif);
+        font-weight: 600;
     }
 
     .title-edit-input {
@@ -49,6 +32,23 @@
 
         &:focus {
             border-bottom: 2px solid var(--color-accent);
+        }
+    }
+
+    .title-pencil {
+        position: absolute;
+        top: 4px;
+        right: -22px;
+        background: none;
+        border: none;
+        padding: 2px;
+        cursor: pointer;
+        opacity: 0.35;
+        transition: opacity 0.2s ease;
+        color: var(--color-text);
+
+        &:hover {
+            opacity: 0.8;
         }
     }
 

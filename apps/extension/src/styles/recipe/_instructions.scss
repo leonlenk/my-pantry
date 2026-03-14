@@ -19,6 +19,10 @@
         }
     }
 
+    @media (max-width: 767px) {
+        padding-bottom: 80px; // clearance for the ingredients FAB
+    }
+
     .instruction-step {
         display: flex;
         gap: var(--spacing-lg);

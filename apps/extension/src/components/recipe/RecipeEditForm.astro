@@ -1,0 +1,91 @@
+---
+import feather from "feather-icons";
+
+const plusIcon = feather.icons["plus"]?.toSvg({ width: 14, height: 14 }) || "";
+---
+
+<div id="edit-loading" class="loading">Loading recipe...</div>
+<div id="edit-error" class="error-state hidden">
+    <h2>Recipe not found</h2>
+    <p>This recipe might have been deleted or never existed.</p>
+    <a href="pantry.html" class="btn">Return to Pantry</a>
+</div>
+
+<div id="edit-form" class="edit-form hidden">
+    <!-- Details section -->
+    <section class="edit-section card">
+        <h2>Details</h2>
+        <div class="edit-meta-grid">
+            <div class="field-group edit-meta-full">
+                <label for="edit-title">Title</label>
+                <input
+                    type="text"
+                    id="edit-title"
+                    placeholder="Recipe title"
+                />
+            </div>
+            <div class="field-group">
+                <label for="edit-prep-time">Prep Time (minutes)</label>
+                <input
+                    type="number"
+                    id="edit-prep-time"
+                    min="0"
+                    placeholder="e.g. 15"
+                />
+            </div>
+            <div class="field-group">
+                <label for="edit-cook-time">Cook Time (minutes)</label>
+                <input
+                    type="number"
+                    id="edit-cook-time"
+                    min="0"
+                    placeholder="e.g. 30"
+                />
+            </div>
+            <div class="field-group">
+                <label for="edit-servings">Servings</label>
+                <input
+                    type="number"
+                    id="edit-servings"
+                    min="1"
+                    placeholder="e.g. 4"
+                />
+            </div>
+            <div class="field-group">
+                <label for="edit-yield">Yield</label>
+                <input
+                    type="text"
+                    id="edit-yield"
+                    placeholder="e.g. 12 cookies"
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- Ingredients section -->
+    <section class="edit-section card">
+        <h2>Ingredients</h2>
+        <div id="edit-ingredients-list" class="edit-list"></div>
+        <button type="button" id="add-ingredient-btn" class="btn add-item-btn">
+            <span set:html={plusIcon}></span> Add Ingredient
+        </button>
+    </section>
+
+    <!-- Instructions section -->
+    <section class="edit-section card">
+        <h2>Instructions</h2>
+        <div id="edit-instructions-list" class="edit-list"></div>
+        <button type="button" id="add-instruction-btn" class="btn add-item-btn">
+            <span set:html={plusIcon}></span> Add Step
+        </button>
+    </section>
+
+    <!-- Notes section -->
+    <section class="edit-section card">
+        <h2>Notes</h2>
+        <div id="edit-notes-list" class="edit-list"></div>
+        <button type="button" id="add-note-btn" class="btn add-item-btn">
+            <span set:html={plusIcon}></span> Add Note
+        </button>
+    </section>
+</div>
