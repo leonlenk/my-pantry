@@ -3,7 +3,7 @@
     "private": true,
     "scripts": {
         "api:dev": "cd apps/api && uv run uvicorn main:app --reload --port 8000",
-        "api:test": "cd apps/api && uv run pytest ../../tests/api -v",
+        "api:test": "cd apps/api && uv run --dev pytest ../../tests/api -v",
         "api:kill": "fuser -k 8000/tcp || true",
         "ext:dev": "pnpm --filter mypantry dev",
         "ext:build": "pnpm --filter mypantry build",

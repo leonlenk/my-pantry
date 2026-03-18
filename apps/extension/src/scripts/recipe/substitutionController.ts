@@ -12,7 +12,7 @@
  */
 
 import { saveRecipeLocally } from "../../utils/db";
-import { renderIngredients } from "./recipeController";
+import { renderIngredients } from "./ingredientsRenderer";
 import { recipeState } from "./recipeState";
 
 declare const chrome: any;
