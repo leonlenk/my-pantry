@@ -1,62 +1,52 @@
 import { initializeByokForm } from "./byok";
 
 // Elements
-const stepLogin = document.getElementById("step-login");
-const stepSyncing = document.getElementById("step-syncing");
-const stepReady = document.getElementById("step-ready");
+const stepIdentity  = document.getElementById("step-identity");
+const stepApiChoice = document.getElementById("step-api-choice");
+const stepByok      = document.getElementById("step-byok");
+const stepSyncing   = document.getElementById("step-syncing");
+const stepReady     = document.getElementById("step-ready");
 
-const btnOauth = document.getElementById("btn-oauth-google");
-const btnShowByok = document.getElementById("btn-show-byok");
-const byokFormWrapper = document.getElementById("byok-form-wrapper");
-
-// Initialize the shared BYOK form logic for the setup page
-initializeByokForm({
-    idPrefix: "setup-byok-",
-    onSaveSuccess: async (provider: string, model: string, isNewKey: boolean) => {
-        await doPostModelSync();
-    },
-    isSettingsMode: false
-});
-
-const syncBar = document.getElementById("sync-bar-fill");
+const btnOauth            = document.getElementById("btn-oauth-google");
+const btnContinueAnonymous = document.getElementById("btn-continue-anonymous");
+const btnChooseCloud      = document.getElementById("btn-choose-cloud");
+const btnChooseByok       = document.getElementById("btn-choose-byok");
+const btnBackByok         = document.getElementById("btn-back-byok");
+const syncBar  = document.getElementById("sync-bar-fill");
 const syncText = document.getElementById("sync-text");
 const btnCloseTab = document.getElementById("btn-close-tab");
+
+let byokPreviousStep: HTMLElement | null = null;
 
 function showState(stateElement: HTMLElement | null) {
     document.querySelectorAll(".view-state").forEach((el) => el.classList.remove("active"));
     if (stateElement) stateElement.classList.add("active");
 }
 
-// 1. BYOK Flow
-btnShowByok?.addEventListener("click", () => {
-    byokFormWrapper?.classList.toggle("hidden");
-    if (!byokFormWrapper?.classList.contains("hidden")) {
-        const inputApiKey = document.getElementById("setup-byok-input-api-key") as HTMLInputElement | null;
-        inputApiKey?.focus();
-    }
+// Initialize the shared BYOK form logic (used for both anonymous and Google+BYOK paths)
+initializeByokForm({
+    idPrefix: "setup-byok-",
+    onSaveSuccess: async () => {
+        await doPostModelSync();
+    },
+    isSettingsMode: false,
 });
 
-// 2. OAuth Flow — Tab-Capture strategy (no `identity` permission required)
-//
-// Instead of chrome.identity.launchWebAuthFlow (which needs the `identity`
-// permission), we open a real tab to mypantry.dev/api/auth/callback. Supabase
-// redirects to that URL after Google consent and writes the session to
-// localStorage. The content script on that page reads the session and sends
-// AUTH_SESSION_CAPTURED → background, which persists the tokens, closes the
-// tab, then fires AUTH_COMPLETE → here to advance the UI.
+// ─── STEP 1: Identity choice ─────────────────────────────────────────────────
 
-/** Puts the Google button into a loading state while the OAuth tab is open. */
+/** Puts the Google choice card into a loading state while the OAuth tab is open. */
 function setOauthLoading(loading: boolean) {
     const btn = btnOauth as HTMLButtonElement | null;
     if (!btn) return;
     if (loading) {
         btn.disabled = true;
-        btn.classList.add("loading");
         btn.dataset.originalHtml = btn.innerHTML;
-        btn.innerHTML = `<span class="btn-spinner"></span>Opening Google sign-in…`;
+        const body = btn.querySelector(".choice-card-body");
+        if (body) {
+            body.innerHTML = `<div class="choice-card-title"><span class="btn-spinner"></span>Opening Google sign-in…</div>`;
+        }
     } else {
         btn.disabled = false;
-        btn.classList.remove("loading");
         if (btn.dataset.originalHtml) {
             btn.innerHTML = btn.dataset.originalHtml;
             delete btn.dataset.originalHtml;
@@ -64,51 +54,93 @@ function setOauthLoading(loading: boolean) {
     }
 }
 
+// OAuth Flow — Tab-Capture strategy (no `identity` permission required)
 btnOauth?.addEventListener("click", async () => {
     const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
     const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
     if (!supabaseUrl || supabaseUrl.includes("your-project-ref")) {
         console.error("PUBLIC_SUPABASE_URL is not configured in .env");
-        alert("OAuth is not configured. Please add your Gemini key via 'Bring Your Own Key'.");
+        alert("OAuth is not configured. Please continue anonymously and add your own API key.");
         return;
     }
 
     setOauthLoading(true);
 
-    // Pre-save the environment variables to storage so the background script
-    // can access them without crashing from esbuild's lack of import.meta
     await chrome.storage.local.set({
+        identityMode: "google",
         supabaseUrl,
         supabaseAnonKey,
-        apiUrl: import.meta.env.PUBLIC_API_URL ?? 'http://127.0.0.1:8000',
-        llmProvider: 'google',
-        llmModel: 'gemini-2.5-flash',
-        plaintextApiKey: null,
+        apiUrl: import.meta.env.PUBLIC_API_URL ?? "http://127.0.0.1:8000",
     });
 
-    // Supabase will redirect back to this page after the Google consent screen.
-    // The content script running on that page captures the session and notifies us.
     const redirectTo = "https://mypantry.dev/api/auth/callback";
     const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=consent`;
 
     console.log("[OAuth] Opening auth tab:", authUrl);
     chrome.tabs.create({ url: authUrl });
-    // startModelDownload() used to be here, but we now jump straight to doPostModelSync
-    // since the model is pre-downloaded during build and bundled.
 });
 
+// Anonymous path — go directly to BYOK form
+btnContinueAnonymous?.addEventListener("click", async () => {
+    await chrome.storage.local.set({
+        identityMode: "anonymous",
+        apiUrl: import.meta.env.PUBLIC_API_URL ?? "http://127.0.0.1:8000",
+    });
+    byokPreviousStep = stepIdentity;
+    showState(stepByok);
+});
+
+// ─── STEP 2: API choice (Google users only) ───────────────────────────────────
+
+btnChooseCloud?.addEventListener("click", async () => {
+    await chrome.storage.local.set({
+        apiMode: "cloud",
+        llmProvider: "google",
+        llmModel: "gemini-2.5-flash",
+        plaintextApiKey: null,
+        setupComplete: true,
+    });
+    await doPostModelSync();
+});
+
+btnChooseByok?.addEventListener("click", () => {
+    byokPreviousStep = stepApiChoice;
+    showState(stepByok);
+});
+
+btnBackByok?.addEventListener("click", () => {
+    showState(byokPreviousStep ?? stepIdentity);
+});
+
+// ─── AUTH_COMPLETE: background persisted the Supabase session ────────────────
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "AUTH_COMPLETE") {
+        setOauthLoading(false);
+
+        (async () => {
+            // Mark setup complete now so the popup doesn't redirect to setup on next open.
+            // The user still needs to pick their API mode on step-api-choice.
+            await chrome.storage.local.set({ setupComplete: true });
+            showState(stepApiChoice);
+        })();
+    }
+});
+
+// ─── Post-setup sync ─────────────────────────────────────────────────────────
+
 /**
- * Runs after the model is ready (downloaded or already cached).
- * For Google OAuth users on a fresh device: shows the "Populating your Pantry..."
- * screen and cold-boot syncs all cloud recipes before redirecting to the pantry.
- * For BYOK users: goes straight to the ready screen.
+ * Runs after the model/API choice is finalised.
+ * For Google Cloud users on a fresh device: shows the "Populating your Pantry..."
+ * screen and cold-boot syncs all cloud recipes.
+ * For BYOK or anonymous users: goes straight to the ready screen.
  */
 async function doPostModelSync() {
-    const { llmProvider } = await chrome.storage.local.get("llmProvider");
+    const { apiMode } = await chrome.storage.local.get("apiMode");
 
-    if (llmProvider !== "google") {
-        // BYOK users have no cloud — show ready immediately
+    if (apiMode !== "cloud") {
+        // BYOK or anonymous — no cloud to sync, go straight to ready
         showState(stepReady);
         return;
     }
@@ -116,7 +148,6 @@ async function doPostModelSync() {
     // Check if the user already has cloud recipes (avoid redundant full syncs on relog)
     const { lastSyncAt } = await chrome.storage.local.get("lastSyncAt");
     if (lastSyncAt) {
-        // Already synced before — go straight to ready
         showState(stepReady);
         return;
     }
@@ -127,15 +158,12 @@ async function doPostModelSync() {
     if (syncBar) syncBar.style.width = "5%";
 
     try {
-        // Step 1: Pull recipes from cloud → local (handles multi-device restore)
         const pullResult: { success: boolean; merged: number; total: number } =
             await chrome.runtime.sendMessage({ type: "SYNC_FROM_CLOUD", since: undefined });
 
         if (syncBar) syncBar.style.width = "50%";
         if (syncText) syncText.textContent = "Syncing your library...";
 
-        // Step 2: Push local recipes → cloud (recovers recipes that were saved
-        // before cloud sync was working, or saved on this device while offline)
         const pushResult: { success: boolean; pushed: number; total: number } =
             await chrome.runtime.sendMessage({ type: "PUSH_ALL_LOCAL_TO_CLOUD" });
 
@@ -155,24 +183,9 @@ async function doPostModelSync() {
         if (syncText) syncText.textContent = "Sync skipped — recipes sync automatically when you save them.";
     }
 
-    // Brief pause so the user can read the result, then go to ready
     await new Promise((r) => setTimeout(r, 1200));
     showState(stepReady);
 }
-
-chrome.runtime.onMessage.addListener((msg) => {
-    // AUTH_COMPLETE: background persisted the Supabase session after the
-    // content script captured it on mypantry.dev/api/auth/callback.
-    if (msg.type === "AUTH_COMPLETE") {
-        setOauthLoading(false);
-
-        // Mark setup complete and jump to sync since model is bundled
-        (async () => {
-            await chrome.storage.local.set({ setupComplete: true });
-            await doPostModelSync();
-        })();
-    }
-});
 
 btnCloseTab?.addEventListener("click", () => {
     window.close();

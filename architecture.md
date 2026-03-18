@@ -12,7 +12,7 @@ A privacy-first, hybrid-architecture recipe assistant. The project is structured
 * **Database & Auth:** Supabase (Postgres with `pgvector`, Google OAuth, Email OTP).
 * **Rate Limiting & Analytics:** Upstash (Serverless Redis) for token-bucket abuse prevention and atomic hit counting. Limits must be configurable from the `.env` file (defaulting to 50 requests/week per user per endpoint).
 * **Logging:** `loguru` for structured, colorized, and queryable backend logging.
-* **Security Layer:** Native Web Crypto API (`PBKDF2` + `AES-GCM`).
+* **Security Layer:** Strict permission scoping; BYOK API keys stored in extension-sandboxed `chrome.storage.local`.
 
 ## 3. Strict Permission Model & Chrome APIs
 * **DO NOT request `<all_urls>` or broad host permissions.**
@@ -22,7 +22,7 @@ A privacy-first, hybrid-architecture recipe assistant. The project is structured
 * **Message Routing:**  Implement a strongly-typed central message hub in the background service worker to orchestrate communication between the Popup, Content Script, and Offscreen Document (e.g., `EXTRACT_RECIPE`, `GENERATE_EMBEDDING`) to avoid callback hell.
 
 ## 4. Security, Analytics, & Abuse Prevention
-* **Extension Key Encryption:** Uses `window.crypto.subtle` to derive an AES-GCM key from a user-created session password. Encrypts the raw LLM API key and stores ONLY the `ciphertext` and `iv` in `chrome.storage.local`. Decrypts strictly into ephemeral memory upon invocation.
+* **Extension Key Storage:** BYOK API keys are stored in `chrome.storage.local`, which is sandboxed to the extension origin and inaccessible to web pages.
 * **Cloud API Protection & CORS:** All backend endpoints are protected by Supabase Auth middleware. The FastAPI app MUST configure `CORSMiddleware` to explicitly accept requests from the extension's `chrome-extension://` origin.
 * **Dual Endpoint Routing:** Expose two distinct endpoints: `/api/extract` (for scraping) and `/api/substitute` (for reasoning). Both should use the `gemini-2.5-flash` model.
 * **Independent Rate Limits:** Each endpoint uses a separate Redis-backed token bucket (e.g., 50 requests/week for `/api/extract` and 50 requests/week for `/api/substitute` per authenticated user ID).

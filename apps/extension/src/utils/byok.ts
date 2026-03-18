@@ -1,5 +1,3 @@
-import { encryptData } from "./crypto";
-
 const hardcodedPricing: Record<string, string> = {
     // Google
     "models/gemini-2.5-flash": "Cheaper",
@@ -10,10 +8,6 @@ const hardcodedPricing: Record<string, string> = {
     "gpt-4o-mini": "$0.15/1M in",
     "o3-mini": "$1.10/1M in",
     "gpt-4o": "$2.50/1M in",
-    // Claude
-    "claude-3-haiku-20240307": "$0.25/1M in",
-    "claude-3-5-haiku-20241022": "$0.80/1M in",
-    "claude-3-5-sonnet-20241022": "$3.00/1M in"
 };
 
 const hardcodedPricingSort: Record<string, number> = {
@@ -26,11 +20,19 @@ const hardcodedPricingSort: Record<string, number> = {
     "gpt-4o-mini": 0.15,
     "o3-mini": 1.10,
     "gpt-4o": 2.50,
-    // Claude
-    "claude-3-haiku-20240307": 0.25,
-    "claude-3-5-haiku-20241022": 0.80,
-    "claude-3-5-sonnet-20241022": 3.00
 };
+
+// Anthropic models are hardcoded to avoid CORS issues with the /v1/models endpoint from browser contexts.
+// The messages endpoint supports direct browser access but the models listing endpoint does not.
+const hardcodedClaudeModels = [
+    { id: "claude-3-haiku-20240307",      name: "Claude 3 Haiku",      price: "$0.25/1M in" },
+    { id: "claude-3-5-haiku-20241022",    name: "Claude 3.5 Haiku",    price: "$0.80/1M in" },
+    { id: "claude-haiku-4-5-20251001",    name: "Claude Haiku 4.5",    price: "$0.80/1M in" },
+    { id: "claude-3-5-sonnet-20241022",   name: "Claude 3.5 Sonnet",   price: "$3.00/1M in" },
+    { id: "claude-3-7-sonnet-20250219",   name: "Claude 3.7 Sonnet",   price: "$3.00/1M in" },
+    { id: "claude-sonnet-4-6",            name: "Claude Sonnet 4.6",   price: "$3.00/1M in" },
+    { id: "claude-opus-4-6",              name: "Claude Opus 4.6",     price: "$15.00/1M in" },
+];
 
 export async function fetchModels(
     selectProvider: HTMLSelectElement,
@@ -40,8 +42,8 @@ export async function fetchModels(
 ) {
     const provider = selectProvider.value;
 
-    // OpenRouter doesn't strictly need an API key to fetch the public models list
-    if (provider !== "openrouter" && !apiKey) {
+    // OpenRouter and Claude use hardcoded/public models lists that don't require a key
+    if (provider !== "openrouter" && provider !== "claude" && !apiKey) {
         selectModel.innerHTML = `<option value="">Enter API Key to load models...</option>`;
         selectModel.disabled = true;
         return;
@@ -75,7 +77,6 @@ export async function fetchModels(
             if (!res.ok) throw new Error("Invalid API Key or network error");
             const data = await res.json();
 
-            // Filter to models that support text generation
             const validModels = data.models.filter((m: any) =>
                 m.supportedGenerationMethods?.includes("generateContent")
             ).sort((a: any, b: any) =>
@@ -83,7 +84,6 @@ export async function fetchModels(
             );
 
             optionsHtml = validModels.map((m: any) => {
-                // Return just the model name without "models/" if possible, but Google API usually accepts both. Let's send the ID they provide.
                 const val = m.name.replace("models/", "");
                 const priceLabel = hardcodedPricing[m.name] ? ` (${hardcodedPricing[m.name]})` : "";
                 return `<option value="${val}">${m.displayName || val}${priceLabel}</option>`;
@@ -96,7 +96,6 @@ export async function fetchModels(
             if (!res.ok) throw new Error("Invalid API Key or network error");
             const data = await res.json();
 
-            // OpenAI returns hundreds of models, let's filter to chat models roughly
             const validModels = data.data.filter((m: any) =>
                 m.id.startsWith("gpt-") || m.id.startsWith("o1") || m.id.startsWith("o3")
             ).sort((a: any, b: any) =>
@@ -109,38 +108,22 @@ export async function fetchModels(
             }).join("");
 
         } else if (provider === "claude") {
-            const res = await fetch("https://api.anthropic.com/v1/models", {
-                headers: {
-                    "x-api-key": apiKey,
-                    "anthropic-version": "2023-06-01",
-                    "anthropic-dangerous-direct-browser-access": "true"
-                }
-            });
-            if (!res.ok) throw new Error("Invalid API Key or network error");
-            const data = await res.json();
-
-            optionsHtml = data.data.sort((a: any, b: any) =>
-                (hardcodedPricingSort[a.id] ?? 999) - (hardcodedPricingSort[b.id] ?? 999)
-            ).map((m: any) => {
-                const priceLabel = hardcodedPricing[m.id] ? ` (${hardcodedPricing[m.id]})` : "";
-                return `<option value="${m.id}">${m.display_name || m.id}${priceLabel}</option>`;
-            }).join("");
+            optionsHtml = hardcodedClaudeModels.map(m =>
+                `<option value="${m.id}">${m.name} (${m.price})</option>`
+            ).join("");
         }
 
         if (optionsHtml) {
+            const prevValue = selectModel.value;
             selectModel.innerHTML = optionsHtml;
             selectModel.disabled = false;
 
-            if (preselectModelId) {
-                // Check if the preselect option actually exists in the fetched list
-                if (Array.from(selectModel.options).some(opt => opt.value === preselectModelId)) {
-                    selectModel.value = preselectModelId;
-                }
+            const idToSelect = preselectModelId ?? prevValue;
+            if (idToSelect && Array.from(selectModel.options).some(opt => opt.value === idToSelect)) {
+                selectModel.value = idToSelect;
             }
         } else {
             selectModel.innerHTML = `<option value="">No valid models found</option>`;
-            // If they are on OpenRouter they still need a way to input a custom one maybe, 
-            // but for dropdown it's disabled
             selectModel.disabled = false;
         }
 
@@ -153,8 +136,12 @@ export async function fetchModels(
 export async function loadByokSettings(idPrefix: string, apiKey: string) {
     const selectProvider = document.getElementById(`${idPrefix}select-provider`) as HTMLSelectElement | null;
     const selectModel = document.getElementById(`${idPrefix}select-model`) as HTMLSelectElement | null;
+    const inputApiKey = document.getElementById(`${idPrefix}input-api-key`) as HTMLInputElement | null;
 
     if (!selectProvider || !selectModel) return;
+
+    // Stash the stored key so provider-change handlers can use it when the input is left blank
+    if (inputApiKey && apiKey) inputApiKey.dataset.storedKey = apiKey;
 
     const storageResult: Record<string, any> = await chrome.storage.local.get(["llmProvider", "llmModel"]);
     let currentModel = "";
@@ -169,17 +156,14 @@ export interface ByokFormOptions {
     idPrefix: string;
     onSaveSuccess: (provider: string, model: string, isNewKey: boolean) => void | Promise<void>;
     isSettingsMode?: boolean;
-    getPassword?: () => string;
 }
 
 export async function initializeByokForm(options: ByokFormOptions) {
-    const { idPrefix, onSaveSuccess, isSettingsMode = false, getPassword } = options;
+    const { idPrefix, onSaveSuccess, isSettingsMode = false } = options;
 
     const selectProvider = document.getElementById(`${idPrefix}select-provider`) as HTMLSelectElement | null;
     const selectModel = document.getElementById(`${idPrefix}select-model`) as HTMLSelectElement | null;
     const inputApiKey = document.getElementById(`${idPrefix}input-api-key`) as HTMLInputElement | null;
-    // Password input might be hidden in settings mode, so we use getPassword if provided, otherwise fallback to DOM
-    const inputPassword = document.getElementById(`${idPrefix}input-password`) as HTMLInputElement | null;
     const btnSubmit = document.getElementById(`${idPrefix}btn-submit`) as HTMLButtonElement | null;
     const statusMsg = document.getElementById(`${idPrefix}status-message`);
     const apiKeyHelp = document.getElementById(`${idPrefix}api-key-help`);
@@ -198,24 +182,22 @@ export async function initializeByokForm(options: ByokFormOptions) {
     }
 
     selectProvider.addEventListener("change", () => {
-        fetchModels(selectProvider, selectModel, inputApiKey.value);
+        const key = inputApiKey.value.trim() || inputApiKey.dataset.storedKey || "";
+        fetchModels(selectProvider, selectModel, key);
     });
 
     inputApiKey.addEventListener("blur", () => {
         if (inputApiKey.value.trim().length > 0) {
+            inputApiKey.dataset.storedKey = inputApiKey.value.trim();
             fetchModels(selectProvider, selectModel, inputApiKey.value);
         }
     });
 
     btnSubmit.addEventListener("click", async () => {
         const key = inputApiKey.value.trim();
-        // If they provided a custom getPassword function (e.g. settings auth), use that, otherwise use the input
-        const password = getPassword ? getPassword() : (inputPassword?.value || "");
-
         const provider = selectProvider.value;
         const model = selectModel.value;
 
-        // Validation based on mode
         if (!isSettingsMode && !key) {
             if (statusMsg) {
                 statusMsg.textContent = "API Key is required.";
@@ -230,33 +212,24 @@ export async function initializeByokForm(options: ByokFormOptions) {
         btnSubmit.textContent = "Saving...";
 
         try {
-            let storagePayload: any = {
+            const storagePayload: any = {
                 llmProvider: provider,
-                llmModel: model
+                llmModel: model,
             };
 
             let isNewKey = false;
 
             if (key.length > 0) {
                 isNewKey = true;
-                if (password && password.length > 0) {
-                    const encrypted = await encryptData(key, password);
-                    storagePayload.encryptedApiKey = encrypted;
-                    storagePayload.plaintextApiKey = null;
-                } else {
-                    storagePayload.plaintextApiKey = key;
-                    storagePayload.encryptedApiKey = null;
-                }
+                storagePayload.apiMode = "byok";
+                storagePayload.plaintextApiKey = key;
 
                 // Clear any cached key since we are changing it
                 chrome.runtime.sendMessage({ type: "CLEAR_CACHED_API_KEY" });
             }
 
-            // Always clear supabase token if they are saving from a BYOK form explicitly
             if (!isSettingsMode) {
-                storagePayload.supabaseToken = null;
-                storagePayload.supabaseRefreshToken = null;
-                storagePayload.setupComplete = true; // Mark setup as complete
+                storagePayload.setupComplete = true;
                 storagePayload.apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://127.0.0.1:8000";
             }
 

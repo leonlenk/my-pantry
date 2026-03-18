@@ -153,6 +153,9 @@ export async function callLlm(config: LlmRequestConfig, timeoutMs: number): Prom
 
     if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 401) {
+            throw new Error(`Invalid API key (401). Please re-enter your key in API Settings.`);
+        }
         throw new Error(`LLM API Error (${response.status}): ${errorText}. Try a different model or provider.`);
     }
 

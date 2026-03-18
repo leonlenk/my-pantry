@@ -4,11 +4,10 @@
  * Handles all popup UI interactions:
  *   - Auth state detection and profile badge setup
  *   - Extraction triggering and live status display
- *   - Settings / BYOK panel with encrypted-key unlock flow
- *   - Logout, switch account, cloud logout
+ *   - Settings / BYOK panel
+ *   - Logout and switch account
  */
 
-import { decryptData } from "../../utils/crypto";
 import { initializeByokForm, loadByokSettings } from "../../utils/byok";
 
 declare const chrome: any;
@@ -16,35 +15,38 @@ declare const chrome: any;
 // ─── DOM handles ─────────────────────────────────────────────────────────────
 
 const mainView = document.getElementById("main-view");
-const logoutBtn = document.getElementById("logout-btn");
 const profileBadgeBtn = document.getElementById("profile-badge-btn");
 const profileDropdownMenu = document.getElementById("profile-dropdown-menu");
+const apiSettingsBtn = document.getElementById("api-settings-btn");
+const switchApiModeBtn = document.getElementById("switch-api-mode-btn");
 const switchAccountBtn = document.getElementById("switch-account-btn");
 const cloudLogoutBtn = document.getElementById("cloud-logout-btn");
 const openPantryBtn = document.getElementById("open-pantry-btn");
 const visitHomepageBtn = document.getElementById("visit-homepage-btn");
 const extractBtn = document.getElementById("extract-btn");
-const passwordContainer = document.getElementById("password-container");
-const confirmExtractBtn = document.getElementById("confirm-extract-btn");
-const passwordInput = document.getElementById("popup-password") as HTMLInputElement;
+const statusContainer = document.getElementById("status-container");
 const statusViewport = document.getElementById("status-viewport");
 const statusBadge = document.getElementById("status-badge");
 const safeToCloseMsg = document.getElementById("safe-to-close-msg");
 const errorContainer = document.getElementById("error-container");
 const errorDetails = document.getElementById("error-details");
-const settingsBtn = document.getElementById("settings-btn");
 const btnBackSettings = document.getElementById("btn-back-settings");
 const actionCard = document.querySelector(".action-card");
 const settingsPanel = document.getElementById("settings-panel");
-const settingsAuthPanel = document.getElementById("settings-auth-panel");
-const btnBackSettingsAuth = document.getElementById("btn-back-settings-auth");
-const inputSettingsAuthPassword = document.getElementById(
-    "input-settings-auth-password"
-) as HTMLInputElement | null;
-const btnSubmitSettingsAuth = document.getElementById("btn-submit-settings-auth") as HTMLButtonElement | null;
-const settingsAuthStatus = document.getElementById("settings-auth-status");
 
-let currentSettingsPassword = "";
+// ─── Key validation ───────────────────────────────────────────────────────────
+
+/**
+ * Returns the stored API key only if it's a plain string of reasonable length.
+ * Rejects old encrypted-object values and base64 ciphertext blobs left over
+ * from the previous crypto.ts key-encryption scheme.
+ */
+function getValidStoredKey(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    // Encrypted ciphertext would be base64 and far longer than any real API key
+    if (value.length === 0 || value.length > 300) return undefined;
+    return value;
+}
 
 // ─── JWT helpers ─────────────────────────────────────────────────────────────
 
@@ -71,6 +73,7 @@ function parseJwt(token: string) {
 function addStatusMessage(text: string, isError: boolean = false, isComplete: boolean = false) {
     if (!statusViewport || !statusBadge) return;
 
+    statusContainer?.classList.remove("hidden");
     statusViewport.classList.remove("hidden");
     statusBadge.textContent = isError ? "Extraction failed" : text;
     statusBadge.classList.remove("error", "done");
@@ -123,11 +126,12 @@ async function executeExtraction(apiKey: string, llmModel: string, llmProvider: 
 const AUTH_KEYS = [
     "setupComplete",
     "plaintextApiKey",
-    "encryptedApiKey",
     "supabaseToken",
     "supabaseRefreshToken",
     "llmProvider",
     "llmModel",
+    "identityMode",
+    "apiMode",
 ];
 
 async function clearAuthAndClose() {
@@ -144,44 +148,64 @@ document.addEventListener("DOMContentLoaded", async () => {
             const data = await chrome.storage.local.get([
                 "setupComplete",
                 "plaintextApiKey",
-                "encryptedApiKey",
                 "supabaseToken",
+                "identityMode",
+                "apiMode",
             ]);
 
-            if (!data.setupComplete && !data.plaintextApiKey && !data.encryptedApiKey && !data.supabaseToken) {
+            // Sanitize: if the stored key is not a valid plain string (old encrypted format),
+            // clear it so the user is prompted to re-enter rather than getting silent 401s.
+            const validKey = getValidStoredKey(data.plaintextApiKey);
+            if (data.plaintextApiKey && !validKey) {
+                await chrome.storage.local.remove(["plaintextApiKey"]);
+                chrome.runtime.sendMessage({ type: "CLEAR_CACHED_API_KEY" });
+            }
+
+            const hasAuth =
+                data.setupComplete || validKey || data.supabaseToken;
+
+            if (!hasAuth) {
                 chrome.tabs.create({ url: chrome.runtime.getURL("setup.html") });
+                return;
+            }
+
+            mainView?.classList.remove("hidden");
+
+            const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+            if (supabaseUrl && supabaseAnonKey) {
+                chrome.storage.local.set({ supabaseUrl, supabaseAnonKey });
+            }
+
+            // Backward compat: derive identityMode from token presence if not stored
+            const identityMode: "google" | "anonymous" =
+                data.identityMode ?? (data.supabaseToken ? "google" : "anonymous");
+
+            const emailDisplay = document.getElementById("profile-email-display");
+            const avatar = document.getElementById("profile-avatar") as HTMLImageElement;
+            const anonIcon = document.getElementById("profile-anon-icon");
+
+            if (identityMode === "google" && data.supabaseToken) {
+                const payload = parseJwt(data.supabaseToken);
+                if (payload?.email && emailDisplay) {
+                    emailDisplay.textContent = payload.email;
+                }
+                if (payload?.user_metadata?.avatar_url && avatar) {
+                    avatar.src = payload.user_metadata.avatar_url;
+                    avatar.style.display = "block";
+                    if (anonIcon) (anonIcon as HTMLElement).style.display = "none";
+                }
+                switchAccountBtn?.classList.remove("hidden");
+
+                // Show API mode toggle for Google users
+                const apiMode: "cloud" | "byok" =
+                    data.apiMode ?? (data.supabaseToken ? "cloud" : "byok");
+                if (switchApiModeBtn) {
+                    switchApiModeBtn.textContent = apiMode === "cloud" ? "Switch to BYOK" : "Switch to Cloud";
+                    switchApiModeBtn.classList.remove("hidden");
+                }
             } else {
-                mainView?.classList.remove("hidden");
-
-                const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-                const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-                if (supabaseUrl && supabaseAnonKey) {
-                    chrome.storage.local.set({ supabaseUrl, supabaseAnonKey });
-                }
-
-                if (!data.supabaseToken) {
-                    // BYOK user
-                    document.getElementById("settings-btn")?.classList.remove("hidden");
-                    document.getElementById("logout-btn")?.classList.remove("hidden");
-                } else {
-                    // Cloud user — show profile badge
-                    const payload = parseJwt(data.supabaseToken);
-                    if (payload?.email) {
-                        const profileBadge = document.getElementById("profile-badge-btn");
-                        const emailDisplay = document.getElementById("profile-email-display");
-                        const avatar = document.getElementById("profile-avatar") as HTMLImageElement;
-                        if (profileBadge && emailDisplay && avatar) {
-                            profileBadge.classList.remove("hidden");
-                            emailDisplay.textContent = payload.email;
-                            if (payload.user_metadata?.avatar_url) {
-                                avatar.src = payload.user_metadata.avatar_url;
-                                avatar.style.display = "block";
-                            }
-                        }
-                    } else {
-                        document.getElementById("logout-btn")?.classList.remove("hidden");
-                    }
-                }
+                if (emailDisplay) emailDisplay.textContent = "Anonymous";
             }
         }
     } catch (e) {
@@ -202,9 +226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
                 if (response?.isActive) {
                     extractBtn?.classList.add("hidden");
-                    passwordContainer?.classList.remove("hidden");
-                    if (passwordInput) passwordInput.classList.add("hidden");
-                    if (confirmExtractBtn) confirmExtractBtn.classList.add("hidden");
+                    statusContainer?.classList.remove("hidden");
                     addStatusMessage(response.status || "Extracting in background...");
                 }
             }
@@ -248,7 +270,6 @@ initializeByokForm({
         }, 600);
     },
     isSettingsMode: true,
-    getPassword: () => currentSettingsPassword,
 });
 
 // ─── Navigation buttons ───────────────────────────────────────────────────────
@@ -271,8 +292,23 @@ visitHomepageBtn?.addEventListener("click", () => {
 
 // ─── Auth buttons ─────────────────────────────────────────────────────────────
 
-logoutBtn?.addEventListener("click", clearAuthAndClose);
 cloudLogoutBtn?.addEventListener("click", clearAuthAndClose);
+
+switchApiModeBtn?.addEventListener("click", async () => {
+    profileDropdownMenu?.classList.add("hidden");
+
+    if (typeof chrome !== "undefined" && chrome.storage) {
+        const { apiMode } = await chrome.storage.local.get("apiMode");
+        const currentMode: "cloud" | "byok" = apiMode ?? "cloud";
+        const newMode: "cloud" | "byok" = currentMode === "cloud" ? "byok" : "cloud";
+
+        await chrome.storage.local.set({ apiMode: newMode });
+
+        if (switchApiModeBtn) {
+            switchApiModeBtn.textContent = newMode === "cloud" ? "Switch to BYOK" : "Switch to Cloud";
+        }
+    }
+});
 
 switchAccountBtn?.addEventListener("click", async () => {
     if (typeof chrome !== "undefined" && chrome.storage) {
@@ -312,94 +348,31 @@ document.addEventListener("click", (e) => {
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 
-settingsBtn?.addEventListener("click", async () => {
+apiSettingsBtn?.addEventListener("click", async () => {
+    profileDropdownMenu?.classList.add("hidden");
+
     if (actionCard?.classList.contains("hidden")) {
         // Already open — close it
         settingsPanel?.classList.add("hidden");
-        settingsAuthPanel?.classList.add("hidden");
         actionCard?.classList.remove("hidden");
         return;
     }
 
-    if (!actionCard || (!settingsPanel && !settingsAuthPanel)) return;
+    if (!actionCard || !settingsPanel) return;
 
-    const storageResult = (await chrome.storage.local.get(["encryptedApiKey", "plaintextApiKey"])) as {
-        encryptedApiKey?: any;
+    const storageResult = (await chrome.storage.local.get(["plaintextApiKey"])) as {
         plaintextApiKey?: string;
     };
 
     actionCard.classList.add("hidden");
-
-    if (storageResult.encryptedApiKey) {
-        settingsAuthPanel?.classList.remove("hidden");
-        if (inputSettingsAuthPassword) {
-            inputSettingsAuthPassword.value = "";
-            inputSettingsAuthPassword.focus();
-        }
-        if (settingsAuthStatus) settingsAuthStatus.classList.add("hidden");
-    } else {
-        settingsPanel?.classList.remove("hidden");
-        await loadByokSettings("popup-byok-", storageResult.plaintextApiKey || "");
-    }
+    settingsPanel.classList.remove("hidden");
+    await loadByokSettings("popup-byok-", getValidStoredKey(storageResult.plaintextApiKey) || "");
 });
 
 btnBackSettings?.addEventListener("click", () => {
     if (actionCard && settingsPanel) {
         settingsPanel.classList.add("hidden");
         actionCard.classList.remove("hidden");
-    }
-});
-
-btnBackSettingsAuth?.addEventListener("click", () => {
-    if (actionCard && settingsAuthPanel) {
-        settingsAuthPanel.classList.add("hidden");
-        actionCard.classList.remove("hidden");
-    }
-});
-
-btnSubmitSettingsAuth?.addEventListener("click", async () => {
-    const password = inputSettingsAuthPassword?.value || "";
-    if (!password) {
-        if (settingsAuthStatus) {
-            settingsAuthStatus.textContent = "Password required.";
-            settingsAuthStatus.classList.remove("hidden");
-        }
-        return;
-    }
-
-    if (btnSubmitSettingsAuth) {
-        btnSubmitSettingsAuth.disabled = true;
-        btnSubmitSettingsAuth.textContent = "Unlocking...";
-    }
-
-    try {
-        const storageResult = (await chrome.storage.local.get(["encryptedApiKey"])) as { encryptedApiKey?: any };
-        if (!storageResult.encryptedApiKey) throw new Error("No encrypted key found.");
-
-        const decryptedKey = await decryptData(
-            {
-                ciphertext: storageResult.encryptedApiKey.ciphertext,
-                iv: storageResult.encryptedApiKey.iv,
-                salt: storageResult.encryptedApiKey.salt,
-            },
-            password
-        );
-
-        currentSettingsPassword = password;
-        settingsAuthPanel?.classList.add("hidden");
-        settingsPanel?.classList.remove("hidden");
-        await loadByokSettings("popup-byok-", decryptedKey);
-    } catch (e) {
-        console.error("Settings Unlock Error", e);
-        if (settingsAuthStatus) {
-            settingsAuthStatus.textContent = "Incorrect password.";
-            settingsAuthStatus.classList.remove("hidden");
-        }
-    } finally {
-        if (btnSubmitSettingsAuth) {
-            btnSubmitSettingsAuth.disabled = false;
-            btnSubmitSettingsAuth.textContent = "Unlock Settings";
-        }
     }
 });
 
@@ -417,25 +390,28 @@ extractBtn?.addEventListener("click", async () => {
             "supabaseToken",
             "llmModel",
             "llmProvider",
-            "encryptedApiKey",
+            "apiMode",
         ]);
 
-        const hasCloudAuth = !!storageResult.supabaseToken;
-        const hasPlaintextKey = !!storageResult.plaintextApiKey;
-        const hasEncryptedKey = !!storageResult.encryptedApiKey;
-        const llmModel = storageResult.llmModel || "gemini-2.5-flash";
-        const llmProvider = storageResult.llmProvider || (hasCloudAuth ? "google" : "anthropic");
+        // Backward compat: derive apiMode from token presence if not stored
+        const apiMode: "cloud" | "byok" =
+            storageResult.apiMode ?? (storageResult.supabaseToken ? "cloud" : "byok");
 
-        if (hasCloudAuth || hasPlaintextKey) {
+        const hasCloudMode = apiMode === "cloud" && !!storageResult.supabaseToken;
+        const storedKey = getValidStoredKey(storageResult.plaintextApiKey);
+        const hasPlaintextKey = apiMode === "byok" && !!storedKey;
+
+        const llmModel = storageResult.llmModel || "gemini-2.5-flash";
+        const llmProvider = storageResult.llmProvider || (hasCloudMode ? "google" : "anthropic");
+
+        if (hasCloudMode || hasPlaintextKey) {
             extractBtn?.classList.add("hidden");
-            passwordContainer?.classList.remove("hidden");
-            if (passwordInput) passwordInput.classList.add("hidden");
-            if (confirmExtractBtn) confirmExtractBtn.classList.add("hidden");
+            statusContainer?.classList.remove("hidden");
             addStatusMessage("Starting extraction...");
 
             try {
-                const activeKey = storageResult.supabaseToken || storageResult.plaintextApiKey;
-                const authMode = hasCloudAuth ? "cloud" : "byok";
+                const activeKey = hasCloudMode ? storageResult.supabaseToken : storedKey;
+                const authMode = hasCloudMode ? "cloud" : "byok";
                 await executeExtraction(activeKey, llmModel, llmProvider, authMode);
             } catch (err: any) {
                 let msg = err.message || "Unknown error occurred";
@@ -444,85 +420,15 @@ extractBtn?.addEventListener("click", async () => {
             }
             return;
         }
-
-        if (hasEncryptedKey) {
-            const cacheResponse = await chrome.runtime.sendMessage({ type: "GET_CACHED_API_KEY" });
-            if (cacheResponse?.apiKey) {
-                extractBtn?.classList.add("hidden");
-                passwordContainer?.classList.remove("hidden");
-                if (passwordInput) passwordInput.classList.add("hidden");
-                if (confirmExtractBtn) confirmExtractBtn.classList.add("hidden");
-                addStatusMessage("Starting extraction (using cached key)...");
-
-                try {
-                    await executeExtraction(cacheResponse.apiKey, llmModel, llmProvider, "byok");
-                } catch (err: any) {
-                    let msg = err.message || "Unknown error occurred";
-                    if (msg.length > 80) msg = msg.substring(0, 80) + "...";
-                    addStatusMessage(`Error: ${msg}`, true);
-                }
-                return;
-            }
-        }
     } catch (e: any) {
         console.error("Storage error", e);
     }
 
-    extractBtn?.classList.add("hidden");
-    passwordContainer?.classList.remove("hidden");
-    passwordInput?.focus();
-});
-
-confirmExtractBtn?.addEventListener("click", async () => {
-    const password = passwordInput?.value;
-    if (!password) {
-        addStatusMessage("Please enter your password.", true);
-        return;
-    }
-
-    if (confirmExtractBtn) {
-        (confirmExtractBtn as HTMLButtonElement).disabled = true;
-        confirmExtractBtn.textContent = "Loading...";
-    }
-
-    addStatusMessage("Decrypting keys...");
-
-    try {
-        const storageResult: Record<string, any> = await chrome.storage.local.get([
-            "encryptedApiKey",
-            "llmModel",
-            "llmProvider",
-        ]);
-        const encryptedApiKey = storageResult.encryptedApiKey;
-        const llmModel = storageResult.llmModel || "claude-3-5-sonnet-20241022";
-        const llmProvider = storageResult.llmProvider || "anthropic";
-
-        if (!encryptedApiKey) {
-            addStatusMessage("No API key found. Please run setup again.", true);
-            if (confirmExtractBtn) {
-                (confirmExtractBtn as HTMLButtonElement).disabled = false;
-                confirmExtractBtn.textContent = "Confirm Extraction";
-            }
-            return;
-        }
-
-        const apiKey = await decryptData(encryptedApiKey, password);
-        if (passwordInput) passwordInput.classList.add("hidden");
-        if (confirmExtractBtn) confirmExtractBtn.classList.add("hidden");
-
-        chrome.runtime.sendMessage({ type: "CACHE_API_KEY", apiKey });
-        await executeExtraction(apiKey, llmModel, llmProvider, "byok");
-    } catch (error: any) {
-        let msg = error.message || "Unknown error";
-        if (msg.length > 80) msg = msg.substring(0, 80) + "...";
-        addStatusMessage(`Error: ${msg}`, true);
-    } finally {
-        if (confirmExtractBtn && errorContainer && !errorContainer.classList.contains("hidden")) {
-            (confirmExtractBtn as HTMLButtonElement).disabled = false;
-            confirmExtractBtn.textContent = "Confirm Extraction";
-            confirmExtractBtn.classList.remove("hidden");
-            if (passwordInput) passwordInput.classList.remove("hidden");
-        }
+    // No key configured — open settings
+    addStatusMessage("No API key configured. Please add one in API Settings.", true);
+    if (extractBtn) {
+        (extractBtn as HTMLButtonElement).disabled = false;
+        extractBtn.textContent = "Extract & Add to Pantry";
     }
 });
 
@@ -533,10 +439,6 @@ chrome.runtime.onMessage.addListener((message: any) => {
     const { status, isError, isComplete } = message;
     addStatusMessage(status, isError, isComplete);
 
-    if (isError && confirmExtractBtn) {
-        (confirmExtractBtn as HTMLButtonElement).disabled = false;
-        confirmExtractBtn.textContent = "Confirm Extraction";
-    }
     if (isComplete || isError) {
         if (extractBtn) {
             (extractBtn as HTMLButtonElement).disabled = false;

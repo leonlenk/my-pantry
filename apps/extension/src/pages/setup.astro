@@ -9,16 +9,34 @@ const downloadIcon =
         height: 48,
         color: "var(--color-accent)",
     }) || "";
-const keyIcon =
-    (feather.icons["key"] || feather.icons["help-circle"])?.toSvg({
-        width: 18,
-        height: 18,
-    }) || "";
 const coffeeIcon =
     (feather.icons["coffee"] || feather.icons["help-circle"])?.toSvg({
         width: 48,
         height: 48,
         color: "var(--color-accent)",
+    }) || "";
+const keyIcon =
+    (feather.icons["key"] || feather.icons["help-circle"])?.toSvg({
+        width: 18,
+        height: 18,
+        color: "var(--color-text-muted)",
+    }) || "";
+const arrowLeftIcon =
+    (feather.icons["arrow-left"] || feather.icons["help-circle"])?.toSvg({
+        width: 16,
+        height: 16,
+    }) || "";
+const cloudIcon =
+    (feather.icons["cloud"] || feather.icons["help-circle"])?.toSvg({
+        width: 18,
+        height: 18,
+        color: "var(--color-text-muted)",
+    }) || "";
+const userIcon =
+    (feather.icons["user"] || feather.icons["help-circle"])?.toSvg({
+        width: 18,
+        height: 18,
+        color: "var(--color-text-muted)",
     }) || "";
 ---
 
@@ -75,37 +93,13 @@ const coffeeIcon =
                 }
             }
 
-            .btn.google {
-                width: 100%;
-                padding: 12px;
-                background: white;
-                color: #444;
-                border: 1px solid #ddd;
-                font-size: 1rem;
-                margin-bottom: var(--spacing-md);
-            }
-
-            .btn.google:hover {
-                background: #f8f8f8;
-            }
-
-            .btn.google.loading {
-                color: #888;
-                cursor: not-allowed;
-                opacity: 0.85;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 10px;
-            }
-
-            /* Inline spinner shown while the OAuth popup is opening */
+            /* Inline spinner shown while the OAuth choice card is loading */
             .btn-spinner {
                 display: inline-block;
-                width: 16px;
-                height: 16px;
-                border: 2px solid #ccc;
-                border-top-color: #555;
+                width: 14px;
+                height: 14px;
+                border: 2px solid var(--color-border);
+                border-top-color: var(--color-text-muted);
                 border-radius: 50%;
                 animation: btn-spin 0.7s linear infinite;
                 flex-shrink: 0;
@@ -115,36 +109,6 @@ const coffeeIcon =
                 to {
                     transform: rotate(360deg);
                 }
-            }
-
-            .btn.byok {
-                width: 100%;
-                padding: 12px;
-                font-size: 1rem;
-                border: 1px solid var(--color-accent);
-            }
-
-            .provider-divider {
-                display: flex;
-                align-items: center;
-                text-align: center;
-                margin: var(--spacing-md) 0;
-                color: var(--color-text-meta);
-            }
-
-            .provider-divider::before,
-            .provider-divider::after {
-                content: "";
-                flex: 1;
-                border-bottom: 1px solid var(--color-border);
-            }
-
-            .provider-divider:not(:empty)::before {
-                margin-right: 0.25em;
-            }
-
-            .provider-divider:not(:empty)::after {
-                margin-left: 0.25em;
             }
 
             /* Progress Bar Styles */
@@ -163,6 +127,120 @@ const coffeeIcon =
                 width: 0%;
                 transition: width 0.2s ease-out;
             }
+
+            .step-label {
+                font-size: 0.75rem;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--color-text-muted);
+                margin-bottom: var(--spacing-sm);
+            }
+
+            .step-heading {
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: var(--color-primary);
+                margin-bottom: var(--spacing-lg);
+            }
+
+            .choice-card {
+                border: 1px solid var(--color-border);
+                border-radius: var(--radius-md);
+                padding: 14px 16px;
+                margin-bottom: var(--spacing-sm);
+                text-align: left;
+                cursor: pointer;
+                background: var(--color-bg);
+                transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+                width: 100%;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+            }
+
+            .choice-card:hover {
+                border-color: var(--color-accent);
+                background: var(--color-surface);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            }
+
+            .choice-card:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+                border-color: var(--color-border);
+                box-shadow: none;
+            }
+
+            .choice-card-icon {
+                flex-shrink: 0;
+                width: 36px;
+                height: 36px;
+                border-radius: var(--radius-sm);
+                background: var(--color-surface);
+                border: 1px solid var(--color-border);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .choice-card-body {
+                flex: 1;
+                min-width: 0;
+                text-align: left;
+            }
+
+            .choice-card-title {
+                font-weight: 600;
+                font-size: 0.95rem;
+                color: var(--color-primary);
+                margin-bottom: 2px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .choice-card-desc {
+                font-size: 0.8rem;
+                color: var(--color-text-muted);
+                margin: 0;
+                line-height: 1.4;
+            }
+
+            #step-byok {
+                position: relative;
+            }
+
+            .btn-back {
+                position: absolute;
+                top: 0;
+                left: 0;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: none;
+                border: none;
+                padding: 0;
+                font-size: 0.85rem;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                transition: color 0.15s;
+            }
+
+            .btn-back:hover {
+                color: var(--color-primary);
+            }
+
+            .badge {
+                font-size: 0.65rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                padding: 2px 6px;
+                border-radius: var(--radius-pill);
+                background: var(--color-accent);
+                color: white;
+            }
         </style>
     </head>
     <body>
@@ -170,52 +248,80 @@ const coffeeIcon =
             <h1 class="brand-title">Pantry Clip</h1>
             <p class="brand-subtitle">Your intelligent recipe vault</p>
 
-            <!-- STATE 1: ONBOARDING / LOGIN -->
-            <section id="step-login" class="view-state active">
-                <p style="margin-bottom: var(--spacing-lg);">
-                    Sign in to sync your recipes across devices, or provide your
-                    own API key to run fully local.
-                </p>
+            <!-- STEP 1: IDENTITY CHOICE -->
+            <section id="step-identity" class="view-state active">
+                <p class="step-label">Step 1 of 2</p>
+                <p class="step-heading">How do you want to sign in?</p>
 
-                <button id="btn-oauth-google" class="btn google">
-                    <svg
-                        style="margin-right: 8px; width:18px; height:18px;"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            fill="#4285F4"
-                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        ></path>
-                        <path
-                            fill="#34A853"
-                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        ></path>
-                        <path
-                            fill="#FBBC05"
-                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                        ></path>
-                        <path
-                            fill="#EA4335"
-                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        ></path>
-                    </svg>
-                    Continue with Google
+                <button id="btn-oauth-google" class="choice-card">
+                    <div class="choice-card-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"></path>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"></path>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"></path>
+                        </svg>
+                    </div>
+                    <div class="choice-card-body">
+                        <div class="choice-card-title">
+                            Sign in with Google
+                            <span class="badge">Recommended</span>
+                        </div>
+                        <p class="choice-card-desc">Sync recipes across devices. Free cloud backup included.</p>
+                    </div>
                 </button>
 
-                <div class="provider-divider">OR</div>
-
-                <button id="btn-show-byok" class="btn outline byok">
-                    <span set:html={keyIcon}></span>
-
-                    Bring Your Own Key
+                <button id="btn-continue-anonymous" class="choice-card">
+                    <div class="choice-card-icon">
+                        <span set:html={userIcon}></span>
+                    </div>
+                    <div class="choice-card-body">
+                        <div class="choice-card-title">Continue Anonymously</div>
+                        <p class="choice-card-desc">Use your own API key. No account required, fully local.</p>
+                    </div>
                 </button>
-
-                <div id="byok-form-wrapper" class="hidden mt">
-                    <ByokForm idPrefix="setup-byok-" />
-                </div>
             </section>
 
-            <!-- STATE 3: POPULATING PANTRY (cold boot sync, Google OAuth only) -->
+            <!-- STEP 2: API CHOICE (Google users only) -->
+            <section id="step-api-choice" class="view-state">
+                <p class="step-label">Step 2 of 2</p>
+                <p class="step-heading">How should recipes be extracted?</p>
+
+                <button id="btn-choose-cloud" class="choice-card">
+                    <div class="choice-card-icon">
+                        <span set:html={cloudIcon}></span>
+                    </div>
+                    <div class="choice-card-body">
+                        <div class="choice-card-title">
+                            Pantry Clip Cloud API
+                            <span class="badge">Recommended</span>
+                        </div>
+                        <p class="choice-card-desc">Powered by Gemini via our servers. No API key needed.</p>
+                    </div>
+                </button>
+
+                <button id="btn-choose-byok" class="choice-card">
+                    <div class="choice-card-icon">
+                        <span set:html={keyIcon}></span>
+                    </div>
+                    <div class="choice-card-body">
+                        <div class="choice-card-title">Bring Your Own Key</div>
+                        <p class="choice-card-desc">Use your own key from Google, Anthropic, OpenAI, or OpenRouter.</p>
+                    </div>
+                </button>
+            </section>
+
+            <!-- STEP 3: BYOK FORM (anonymous or Google+BYOK) -->
+            <section id="step-byok" class="view-state">
+                <button id="btn-back-byok" class="btn-back">
+                    <span set:html={arrowLeftIcon}></span> Back
+                </button>
+                <p class="step-label">API Key Setup</p>
+                <p class="step-heading" style="margin-bottom: var(--spacing-md);">Configure your API key</p>
+                <ByokForm idPrefix="setup-byok-" />
+            </section>
+
+            <!-- STEP 4: POPULATING PANTRY (cold boot sync, Google OAuth + Cloud only) -->
             <section id="step-syncing" class="view-state">
                 <span
                     set:html={downloadIcon}
@@ -232,7 +338,7 @@ const coffeeIcon =
                 </p>
             </section>
 
-            <!-- STATE 3: READY -->
+            <!-- STEP 5: READY -->
             <section id="step-ready" class="view-state">
                 <span
                     set:html={coffeeIcon}

@@ -72,42 +72,29 @@ subSendBtn?.addEventListener("click", async () => {
     chrome.storage.local.get(
         [
             "plaintextApiKey",
-            "encryptedApiKey",
             "supabaseToken",
             "llmModel",
             "llmProvider",
+            "apiMode",
         ],
         async (res: {
             plaintextApiKey?: string;
-            encryptedApiKey?: string;
             supabaseToken?: string;
             llmModel?: string;
             llmProvider?: string;
+            apiMode?: string;
         }) => {
-            const { plaintextApiKey, encryptedApiKey, supabaseToken, llmModel, llmProvider } = res;
+            const { plaintextApiKey, supabaseToken, llmModel, llmProvider, apiMode } = res;
             const provider = llmProvider || "anthropic";
 
-            let apiKey = supabaseToken || plaintextApiKey;
-            const authMode = supabaseToken ? "cloud" : "byok";
+            const resolvedApiMode = apiMode ?? (supabaseToken ? "cloud" : "byok");
+            const apiKey = resolvedApiMode === "cloud" ? supabaseToken : plaintextApiKey;
+            const authMode = resolvedApiMode === "cloud" ? "cloud" : "byok";
 
             if (!apiKey) {
-                if (encryptedApiKey) {
-                    const cacheResponse = await chrome.runtime.sendMessage({
-                        type: "GET_CACHED_API_KEY",
-                    });
-                    if (cacheResponse?.apiKey) {
-                        apiKey = cacheResponse.apiKey;
-                    } else {
-                        if (subStatusText)
-                            subStatusText.textContent =
-                                "Error: API key is encrypted. Please enter your master password in the extension popup first to unlock it.";
-                        return;
-                    }
-                } else {
-                    if (subStatusText)
-                        subStatusText.textContent = `Error: API key for ${provider} not set.`;
-                    return;
-                }
+                if (subStatusText)
+                    subStatusText.textContent = `Error: No API key configured. Please add one in API Settings.`;
+                return;
             }
 
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {

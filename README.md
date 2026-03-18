@@ -52,7 +52,7 @@ The project is structured as a monorepo containing two main applications:
 - **LLM Integrations**: Directly utilizing Claude and Gemini provider APIs using Structured Outputs (no heavy abstraction frameworks).
 - **Database & Auth**: Supabase (Postgres & Google OAuth). *Note: Vectors are strictly computed and stored locally on the client-side; Supabase is solely used for cloud backup state and does not use `pgvector`.*
 - **Rate Limiting**: Upstash (Serverless Redis) for robust, token-bucket abuse prevention.
-- **Security Layer**: Native Web Crypto API (`PBKDF2` + `AES-GCM`) for fully local, encrypted API key storage.
+- **Security Layer**: Strict permission scoping with minimal Chrome API surface (`activeTab`, `scripting`, `storage`, `offscreen`).
 
 ---
 
@@ -122,7 +122,7 @@ pnpm build
 
 ## 🔒 Security & Privacy Model
 - **Strict Permission Scoping**: Requires only `"activeTab"`, `"scripting"`, `"storage"`, and `"offscreen"`. Does *not* request `<all_urls>`.
-- **Local Key Encryption**: In BYOK mode, user-provided API keys are encrypted at rest in `chrome.storage.local` using an AES-GCM key derived from a session password.
+- **Local Key Storage**: In BYOK mode, user-provided API keys are stored in `chrome.storage.local`, which is sandboxed to the extension and not accessible to web pages.
 - **Fail-Safe Export**: The dashboard includes an export/import feature, ensuring users retain total ownership of their recipe JSON data regardless of cloud connectivity.
 - **Isolated Sandboxing**: Operations that require high compute are walled off in Chrome's background service worker and offscreen documents, keeping the visible DOM lightweight and snappy.
 
