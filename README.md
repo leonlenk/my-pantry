@@ -32,7 +32,7 @@
   </table>
 </div>
 
-The system leverages on-device edge AI for computing vector embeddings, enabling zero-cost backend scaling while keeping all user data perfectly private. It supports a fully local **Bring Your Own Key (BYOK)** mode as well as a **Freemium Cloud-Synced** mode powered by Google OAuth.
+The system leverages on-device edge AI for computing vector embeddings, enabling zero-cost backend scaling while keeping all user data perfectly private. It supports a **Bring Your Own Key (BYOK)** mode, a **Freemium Cloud-Synced** mode powered by Google OAuth, or both simultaneously — cloud auth and BYOK are fully orthogonal.
 
 ---
 
@@ -51,7 +51,7 @@ The project is structured as a monorepo containing two main applications:
 - **Backend API**: FastAPI (Python 3.10+), managed by the `uv` package manager, and utilizing `loguru` for structured telemetry.
 - **LLM Integrations**: Directly utilizing Claude and Gemini provider APIs using Structured Outputs (no heavy abstraction frameworks).
 - **Database & Auth**: Supabase (Postgres & Google OAuth). *Note: Vectors are strictly computed and stored locally on the client-side; Supabase is solely used for cloud backup state and does not use `pgvector`.*
-- **Rate Limiting**: Upstash (Serverless Redis) for robust, token-bucket abuse prevention.
+- **Rate Limiting**: Upstash (Serverless Redis) for robust, fixed-window abuse prevention (50 req/week per user per endpoint).
 - **Security Layer**: Strict permission scoping with minimal Chrome API surface (`activeTab`, `scripting`, `storage`, `offscreen`).
 
 ---
@@ -81,10 +81,10 @@ If the user authenticates via Supabase (Google OAuth), the extension pushes its 
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18+) & [pnpm](https://pnpm.io/)
-- [Python 3.10+](https://www.python.org/) & [uv](https://github.com/astral-sh/uv)
+- [Python 3.14+](https://www.python.org/) & [uv](https://github.com/astral-sh/uv)
 - A [Supabase](https://supabase.com/) project (using standard Postgres)
 - An [Upstash Redis](https://upstash.com/) database
-- Standard API Keys to testing (Gemini, Anthropic, etc.)
+- Standard API Keys for testing (Gemini, Anthropic, etc.)
 
 ### 1. Backend Setup (`/apps/api`)
 ```bash
@@ -94,10 +94,7 @@ cp .env.example .env
 Fill out the variables in `.env` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, etc.).
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -r pyproject.toml
-fastapi dev src/main.py
+uv run uvicorn main:app --reload --port 8000
 ```
 
 ### 2. Extension Setup (`/apps/extension`)
