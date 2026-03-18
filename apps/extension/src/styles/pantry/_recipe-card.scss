@@ -150,7 +150,7 @@
     // When a recipe has a cover image, it is rendered as the card background.
     // A ::before overlay ensures all text remains readable in both light + dark.
     &.has-image {
-        background: var(--card-image-url, none) center / cover no-repeat;
+        background: var(--card-image-url, none) center / cover no-repeat #e8e2d9;
 
         &::before {
             content: "";
@@ -173,6 +173,10 @@
     }
 
     @media (prefers-color-scheme: dark) {
+        &.has-image {
+            background-color: #2a2520;
+        }
+
         &.has-image::before {
             background: linear-gradient(
                 to bottom,
