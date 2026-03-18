@@ -74,25 +74,10 @@ function buildContentHtml(recipe: Recipe): string {
     const description = displayText.slice(0, 160);
     const truncated = displayText.length > 160 ? "..." : "";
 
-    const innerHtml = `
+    return `
         <p class="desc">${description}${truncated}</p>
         <div class="tags">${domainTagHtml}${visibleTagsHtml}${overflowChip}</div>
     `;
-
-    if (recipe.image) {
-        return `
-            <div class="content-flip-container">
-                <div class="content-flip-inner">
-                    <div class="content-front">${innerHtml}</div>
-                    <div class="content-back">
-                        <img src="${recipe.image}" alt="${recipe.title} cover image" loading="lazy" />
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    return innerHtml;
 }
 
 /**
@@ -125,10 +110,6 @@ export function buildRecipeCardHtml(recipe: Recipe): string {
             ${recipe.url
             ? `<a href="${recipe.url}" target="_blank" class="view-btn">View Source →</a>`
             : "<span></span>"
-        }
-            ${recipe.image
-            ? `<button class="preview-toggle-btn" title="Preview image">${safeIcon("image", { width: 16, height: 16 })}</button>`
-            : ""
         }
         </div>
     `;

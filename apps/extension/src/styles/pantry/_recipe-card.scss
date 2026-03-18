@@ -8,11 +8,12 @@
     display: flex;
     flex-direction: column;
     padding: var(--spacing-xl);
-    background: linear-gradient(145deg,
+    background: linear-gradient(160deg,
             var(--color-surface) 0%,
-            var(--color-bg) 100%);
+            var(--color-bg) 65%);
     border: 1px solid var(--color-border);
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
     // Stay invisible until JS marks the page as ready — prevents fadeUp
     // firing before the grid is stable on mobile (layout-shift flash).
     opacity: 0;
@@ -55,38 +56,8 @@
             highlightNew 4s ease-out 0.4s;
     }
 
-    .card-back {
-        background: var(--color-surface);
-        transform: rotateY(180deg);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        border: 1px solid var(--color-border);
 
-        img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 12px;
-        }
-
-        .no-image {
-            color: var(--color-text-muted);
-            opacity: 0.5;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: var(--spacing-sm);
-
-            svg {
-                width: 48px;
-                height: 48px;
-            }
-        }
-    }
-
-    .card-header {
+.card-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
@@ -95,7 +66,8 @@
 
         h3 {
             margin: 0;
-            font-size: 1.4rem;
+            font-size: 1.35rem;
+            line-height: 1.25;
             letter-spacing: -0.02em;
             flex: 1;
             // 2-line clamp with native hover tooltip via title attr
@@ -134,8 +106,8 @@
     }
 
     .meta {
-        font-size: 0.8rem;
-        color: var(--color-text-muted);
+        font-size: 0.78rem;
+        color: var(--color-text-meta);
         margin-bottom: var(--spacing-sm);
         margin-top: 0;
         display: flex;
@@ -162,104 +134,52 @@
     .desc {
         font-size: 0.95rem;
         flex: 1;
+        min-height: 60px;
         line-height: 1.6;
         color: var(--color-text-muted);
         margin-bottom: var(--spacing-md);
     }
 
-    .content-flip-container {
-        flex: 1;
-        perspective: 1000px;
-        display: flex;
-        flex-direction: column;
-        min-height: 150px;
-
-        .content-flip-inner {
-            flex: 1;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-style: preserve-3d;
-        }
-
-        // CSS hover for desktop (unchanged behaviour)
-        &:hover .content-flip-inner,
-        // JS-toggled class for mobile tap (see pantryController)
-        &.is-flipped .content-flip-inner {
-            transform: rotateX(180deg);
-        }
-
-        .content-front {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            backface-visibility: hidden;
-        }
-
-        .content-back {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            backface-visibility: hidden;
-            transform: rotateX(180deg);
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-
-            img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                opacity: 0.9;
-                border-radius: var(--radius-sm);
-            }
-        }
-    }
-
     .card-footer {
         display: flex;
-        justify-content: space-between;
         align-items: center;
         margin-top: var(--spacing-md);
+    }
 
-        // Image-preview toggle — only visible on touch devices.
-        // On desktop the CSS :hover flip handles this instead.
-        .preview-toggle-btn {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            background: none;
-            border: 1px solid var(--color-border);
-            color: var(--color-text-muted);
-            font-size: 0.78rem;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 0.2s ease;
+    // ── Full-bleed background image (large card only) ─────────────────────────
+    // When a recipe has a cover image, it is rendered as the card background.
+    // A ::before overlay ensures all text remains readable in both light + dark.
+    &.has-image {
+        background: var(--card-image-url, none) center / cover no-repeat;
 
-            &:hover,
-            &.active {
-                background-color: var(--color-surface);
-                color: var(--color-accent-text);
-                border-color: var(--color-accent);
-            }
+        &::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(253, 251, 247, 0.95) 0%,
+                rgba(253, 251, 247, 0.88) 35%,
+                rgba(244, 239, 230, 0.78) 100%
+            );
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        > * {
+            position: relative;
+            z-index: 1;
         }
     }
 
-    // On primary-touch devices show the preview button; hide the CSS hover flip
-    // so the two mechanisms don't fight each other.
-    @media (hover: none) and (pointer: coarse) {
-        .card-footer .preview-toggle-btn {
-            display: flex;
-        }
-
-        // Disable CSS :hover flip so only the JS button can trigger it
-        .content-flip-container:hover .content-flip-inner {
-            transform: none;
+    @media (prefers-color-scheme: dark) {
+        &.has-image::before {
+            background: linear-gradient(
+                to bottom,
+                rgba(26, 23, 20, 0.95) 0%,
+                rgba(26, 23, 20, 0.88) 35%,
+                rgba(36, 32, 28, 0.78) 100%
+            );
         }
     }
 
@@ -274,11 +194,12 @@
         transform: scaleX(0);
         transform-origin: left;
         transition: transform 0.4s ease;
+        z-index: 2;
     }
 
     &:hover {
-        transform: translateY(-6px) scale(1.01);
-        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.18);
+        transform: translateY(-4px) scale(1.01);
+        box-shadow: 0 16px 36px -8px rgba(74, 64, 54, 0.16), 0 4px 12px rgba(0, 0, 0, 0.06);
         border-color: rgba(139, 115, 85, 0.35);
 
         &::after {
@@ -286,14 +207,16 @@
         }
 
         .view-btn {
-            color: var(--color-accent-hover);
-            transform: translateX(4px);
+            background: rgba(139, 115, 85, 0.14);
+            border-color: var(--color-accent);
+            color: var(--color-accent-text);
         }
     }
 
     h3 {
         margin-bottom: var(--spacing-sm);
-        font-size: 1.4rem;
+        font-size: 1.35rem;
+        line-height: 1.25;
         letter-spacing: -0.02em;
     }
 
@@ -307,8 +230,8 @@
         display: flex;
         flex-wrap: wrap;
         gap: var(--spacing-xs);
-        margin-bottom: var(--spacing-lg);
-        margin-top: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
 
         .tag {
             font-size: 0.75rem;
@@ -346,11 +269,17 @@
 
     .view-btn {
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
         display: inline-flex;
         align-items: center;
-        transition: all 0.3s ease;
+        gap: 4px;
+        transition: all 0.25s ease;
         text-decoration: none;
+        padding: 5px 13px;
+        border-radius: 999px;
+        background: rgba(139, 115, 85, 0.07);
+        border: 1px solid rgba(139, 115, 85, 0.18);
+        color: var(--color-accent-text);
     }
 
     // ── Skeleton / placeholder card states ───────────────────────────────────

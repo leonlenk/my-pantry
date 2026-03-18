@@ -1433,6 +1433,10 @@ function renderRecipes(recipes: Recipe[]) {
         } else if (currentViewMode === "medium") {
             card.innerHTML = buildMediumCardHtml(recipe);
         } else {
+            if (recipe.image) {
+                card.classList.add("has-image");
+                card.style.setProperty("--card-image-url", `url("${recipe.image}")`);
+            }
             card.innerHTML = buildRecipeCardHtml(recipe);
         }
         wireCardEvents(card, recipe);
