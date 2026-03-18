@@ -10,27 +10,60 @@
 
     .top-row {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: var(--spacing-lg);
+        align-items: center;
+        gap: var(--spacing-md);
         margin-bottom: var(--spacing-lg);
 
-        .left-section,
-        .right-section {
+        .filters {
+            display: flex;
+            gap: var(--spacing-xs);
+            background-color: var(--color-surface);
+            padding: 4px;
+            border-radius: 40px;
+            border: 1px solid var(--color-border);
+            height: 40px;
+            align-items: center;
+            flex-shrink: 0;
+
+            .filter-btn {
+                background: none;
+                border: none;
+                color: var(--color-text-muted);
+                padding: 0 1.2rem;
+                height: 32px;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                font-weight: 600;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+
+                &:hover {
+                    color: var(--color-text);
+                    background-color: rgba(139, 115, 85, 0.05);
+                }
+
+                &.active {
+                    background-color: var(--color-accent);
+                    color: var(--color-on-accent);
+                }
+            }
+        }
+
+        .toolbar {
             flex: 1;
             display: flex;
-        }
-
-        .left-section {
-            justify-content: flex-start;
             align-items: center;
+            justify-content: space-between;
             gap: var(--spacing-sm);
-        }
 
-        .right-section {
-            justify-content: flex-end;
-            align-items: center;
-            gap: var(--spacing-sm);
+            .toolbar-left,
+            .toolbar-right {
+                display: flex;
+                align-items: center;
+                gap: var(--spacing-sm);
+            }
 
             .action-btn {
                 display: flex;
@@ -64,42 +97,6 @@
             }
         }
 
-        .filters {
-            display: flex;
-            gap: var(--spacing-xs);
-            background-color: var(--color-surface);
-            padding: 4px;
-            border-radius: 40px;
-            border: 1px solid var(--color-border);
-            height: 40px;
-            align-items: center;
-
-            .filter-btn {
-                background: none;
-                border: none;
-                color: var(--color-text-muted);
-                padding: 0 1.2rem;
-                height: 32px;
-                border-radius: 20px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                font-weight: 600;
-                transition: all 0.2s ease;
-                display: flex;
-                align-items: center;
-
-                &:hover {
-                    color: var(--color-text);
-                    background-color: rgba(139, 115, 85, 0.05);
-                }
-
-                &.active {
-                    background-color: var(--color-accent);
-                    color: var(--color-on-accent);
-                }
-            }
-        }
-
         .pantry-unit-dropdown {
             height: 40px;
 
@@ -123,10 +120,11 @@
 
         .unit-pref-note {
             font-size: 0.72rem;
-            color: var(--color-text-meta);
-            letter-spacing: 0.01em;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
             white-space: nowrap;
-            margin-left: 2px;
         }
 
         .view-switcher {
@@ -138,7 +136,6 @@
             padding: 3px;
             gap: 2px;
             height: 40px;
-            margin-left: var(--spacing-sm);
 
             .view-mode-btn {
                 display: flex;
@@ -176,78 +173,75 @@
 // Media Queries
 @media (max-width: 950px) {
     .top-bar .top-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: var(--spacing-md);
+        flex-wrap: wrap;
 
-        // Stacking order: filters → actions/tags → search
-        .left-section {
-            order: 0;
-            justify-content: center;
+        .filters {
+            flex: 1;
         }
 
-        .right-section {
-            order: 1;
-            justify-content: center;
+        .toolbar {
+            flex-basis: 100%;
         }
     }
 }
 
 @media (max-width: 600px) {
     .top-bar .top-row {
-        .left-section {
-            flex-wrap: wrap;
-            row-gap: var(--spacing-xs);
+        gap: var(--spacing-sm);
 
-            // Filters always on their own row
-            .filters {
-                flex-basis: 100%;
+        .filters {
+            flex-basis: 100%;
+            justify-content: center;
+
+            .filter-btn {
+                flex: 1;
                 justify-content: center;
-            }
-
-            // Unit pref + label + view switcher share the second row, centered
-            .pantry-unit-dropdown,
-            .unit-pref-note,
-            .view-switcher {
-                flex-shrink: 0;
-            }
-
-            // Tighten left margin on view switcher when wrapping
-            .view-switcher {
-                margin-left: 4px;
+                padding: 0 0.75rem;
+                font-size: 0.85rem;
             }
         }
 
-        .filters .filter-btn {
-            padding: 0 0.9rem;
-            font-size: 0.85rem;
+        .toolbar {
+            flex-basis: 100%;
         }
 
         .pantry-unit-dropdown {
             height: 36px;
 
             .dropdown-trigger {
-                min-width: 68px;
+                min-width: 64px;
                 font-size: 0.76rem;
                 padding: 0 0.75rem;
             }
-
-            .dropdown-menu .dropdown-item {
-                font-size: 0.76rem;
-            }
-        }
-
-        .unit-pref-note {
-            font-size: 0.64rem;
         }
 
         .view-switcher {
             height: 36px;
 
             .view-mode-btn {
-                width: 24px;
-                height: 24px;
+                width: 26px;
+                height: 26px;
             }
+        }
+
+        .action-btn {
+            width: 36px;
+            height: 36px;
+        }
+
+        .new-recipe-btn {
+            .btn-label {
+                display: none;
+            }
+
+            // Show just the icon as a circle button
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
         }
     }
 }

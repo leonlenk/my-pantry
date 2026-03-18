@@ -16,57 +16,56 @@ const listViewIcon = feather.icons["list"]?.toSvg({ width: 15, height: 15 }) || 
 
 <header class="top-bar">
     <div class="top-row">
-        <!-- LEFT: Primary filters -->
-        <div class="left-section">
-            <nav class="filters">
-                <button class="filter-btn" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="recent">Recent</button>
-                <button class="filter-btn" data-filter="favorites"
-                    >Favorites</button
-                >
-            </nav>
-            <Dropdown
-                id="pantry-unit-pref"
-                label="US"
-                className="left-aligned pantry-unit-dropdown"
-                initialValue="us"
-                items={[
-                    { value: "us", label: "US" },
-                    { value: "metric", label: "MET" },
-                ]}
-            />
-            <span class="unit-pref-note">Default Units</span>
+        <!-- ROW 1: Primary filters -->
+        <nav class="filters">
+            <button class="filter-btn" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="recent">Recent</button>
+            <button class="filter-btn" data-filter="favorites">Favorites</button>
+        </nav>
 
-            <div class="view-switcher" id="view-switcher">
-                <button class="view-mode-btn" data-view="large" title="Large grid" set:html={largeViewIcon}></button>
-                <button class="view-mode-btn" data-view="medium" title="Medium grid" set:html={mediumViewIcon}></button>
-                <button class="view-mode-btn" data-view="small" title="List view" set:html={listViewIcon}></button>
+        <!-- ROW 2: Secondary controls -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <span class="unit-pref-note">Units</span>
+                <Dropdown
+                    id="pantry-unit-pref"
+                    label="US"
+                    className="left-aligned pantry-unit-dropdown"
+                    initialValue="us"
+                    items={[
+                        { value: "us", label: "US" },
+                        { value: "metric", label: "SI" },
+                    ]}
+                />
+                <div class="view-switcher" id="view-switcher">
+                    <button class="view-mode-btn" data-view="large" title="Large grid" set:html={largeViewIcon}></button>
+                    <button class="view-mode-btn" data-view="medium" title="Medium grid" set:html={mediumViewIcon}></button>
+                    <button class="view-mode-btn" data-view="small" title="List view" set:html={listViewIcon}></button>
+                </div>
             </div>
-        </div>
-
-        <!-- RIGHT: Actions -->
-        <div class="right-section">
-            <input
-                type="file"
-                id="import-file"
-                accept=".json"
-                style="display: none;"
-            />
-            <button
-                id="import-btn"
-                class="action-btn"
-                title="Import Backup"
-                set:html={uploadIcon}></button>
-            <button
-                id="export-btn"
-                class="action-btn"
-                title="Export Backup"
-                set:html={downloadIcon}></button>
-            <a
-                href="recipe-edit.html"
-                class="btn primary new-recipe-btn"
-                title="Create new recipe"
-                set:html={`${plusIcon} New Recipe`}></a>
+            <div class="toolbar-right">
+                <input
+                    type="file"
+                    id="import-file"
+                    accept=".json"
+                    style="display: none;"
+                />
+                <button
+                    id="import-btn"
+                    class="action-btn"
+                    title="Import Backup"
+                    set:html={uploadIcon}></button>
+                <button
+                    id="export-btn"
+                    class="action-btn"
+                    title="Export Backup"
+                    set:html={downloadIcon}></button>
+                <a
+                    href="recipe-edit.html"
+                    class="btn primary new-recipe-btn"
+                    title="Create new recipe"
+                    set:html={`${plusIcon} <span class="btn-label">New Recipe</span>`}></a>
+            </div>
         </div>
     </div>
 </header>
