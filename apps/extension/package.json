@@ -12,6 +12,7 @@
     "build:watch": "astro build --watch",
     "test": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -s dist",
     "test:unit": "vitest run",
+    "test:e2e": "playwright test",
     "test:firefox": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -t firefox-desktop -s dist",
     "test:chromium": "pnpm run build && NODE_OPTIONS=--no-deprecation web-ext run -t chromium -s dist"
   },
@@ -24,6 +25,7 @@
     "feather-icons": "^4.29.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.0",
     "@types/chrome": "^0.1.37",
     "@types/feather-icons": "^4.29.4",
     "@types/mozilla-readability": "^0.2.1",

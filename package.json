@@ -8,10 +8,11 @@
         "ext:dev": "pnpm --filter mypantry dev",
         "ext:build": "pnpm --filter mypantry build",
         "ext:test": "pnpm --filter mypantry test:unit",
+        "ext:test:e2e": "node scripts/build-ext-if-stale.mjs && pnpm --filter mypantry test:e2e",
         "ext:test:firefox": "pnpm --filter mypantry test:firefox",
         "ext:test:chromium": "pnpm --filter mypantry test:chromium",
         "ext:zip": "cd apps/extension && zip -r my-pantry.zip dist/",
-        "test": "pnpm run api:test && pnpm run ext:test",
+        "test": "node scripts/test-all.mjs",
         "db:push": "pnpm exec supabase db push",
         "db:reset": "pnpm exec supabase db reset",
         "db:status": "pnpm exec supabase status"

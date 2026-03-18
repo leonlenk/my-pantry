@@ -4,6 +4,10 @@ CLAUDE.md
 
 # build output
 dist/
+
+# playwright output
+test-results/
+playwright-report/
 # generated types
 .astro/
 *.log
