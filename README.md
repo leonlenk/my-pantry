@@ -126,6 +126,21 @@ pnpm build
 - **Fail-Safe Export**: The dashboard includes an export/import feature, ensuring users retain total ownership of their recipe JSON data regardless of cloud connectivity.
 - **Isolated Sandboxing**: Operations that require high compute are walled off in Chrome's background service worker and offscreen documents, keeping the visible DOM lightweight and snappy.
 
+### Extension Permissions
+
+| Permission | Justification |
+|---|---|
+| `activeTab` | Grants temporary access to the currently active tab when the user clicks the extension icon. Used to inject the content script that extracts the recipe DOM — no persistent or background access to any tab. |
+| `scripting` | Required to programmatically inject `content.js` into the active tab for DOM extraction. Works in concert with `activeTab` and is scoped to only the tab the user explicitly interacts with. |
+| `storage` | Persists user settings (theme, BYOK provider preference) and BYOK API keys (encrypted with Web Crypto AES-GCM) via `chrome.storage.local`. All data is sandboxed to the extension and inaccessible to web pages. |
+| `offscreen` | Creates a hidden offscreen document (`offscreen.html`) to run `Transformers.js` for local vector embedding computation. Service workers cannot use the Web GPU / WASM APIs required by the AI model, so this isolated context is mandatory. |
+
+### Host Permissions
+
+| Host | Justification |
+|---|---|
+| `https://mypantry.dev/*` | The only host the extension communicates with. Used for the cloud API proxy (`/extract`, `/substitute`, `/sync`, `/auth`) and to run the injected content script on the mypantry.dev web app. No other domains are contacted by the extension itself. |
+
 ---
 
 ## 🎨 Brand Identity
