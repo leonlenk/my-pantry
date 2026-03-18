@@ -89,24 +89,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         btn.textContent = "Saving…";
         try {
             const saved = await saveForm(recipe);
-            if (isNew) {
-                // Generate embedding for the new recipe before navigating
-                try {
-                    const embeddingText = [
-                        saved.title,
-                        saved.semantic_summary,
-                        ...(saved.ingredients?.map((i: any) => i.item) || []),
-                    ].filter(Boolean).join(". ");
-                    if (embeddingText) {
-                        const result: { success: boolean; embedding?: number[] } =
-                            await chrome.runtime.sendMessage({ type: "generate-embedding", text: embeddingText });
-                        if (result?.success && result.embedding) {
-                            await saveRecipeLocally({ ...saved, embedding: result.embedding });
-                        }
+            // Generate/regenerate embedding for both new and edited recipes
+            try {
+                const embeddingText = [
+                    saved.title,
+                    saved.semantic_summary,
+                    ...(saved.ingredients?.map((i: any) => i.item) || []),
+                ].filter(Boolean).join(". ");
+                if (embeddingText) {
+                    const result: { success: boolean; embedding?: number[] } =
+                        await chrome.runtime.sendMessage({ type: "GENERATE_EMBEDDING", text: embeddingText });
+                    if (result?.success && result.embedding) {
+                        await saveRecipeLocally({ ...saved, embedding: result.embedding });
                     }
-                } catch {
-                    // Embedding is optional — proceed without it
                 }
+            } catch {
+                // Embedding is optional — proceed without it
             }
             window.location.href = `recipe.html?id=${recipe.id}`;
         } catch (e) {
@@ -137,7 +135,10 @@ function populateForm(recipe: any) {
     const servingsInput = document.getElementById("edit-servings") as HTMLInputElement;
     const yieldInput = document.getElementById("edit-yield") as HTMLInputElement;
 
+    const summaryInput = document.getElementById("edit-semantic-summary") as HTMLTextAreaElement;
+
     if (titleInput) titleInput.value = recipe.title || "";
+    if (summaryInput) summaryInput.value = recipe.semantic_summary || "";
     if (prepInput && recipe.prepTimeMinutes != null) prepInput.value = String(recipe.prepTimeMinutes);
     if (cookInput && recipe.cookTimeMinutes != null) cookInput.value = String(recipe.cookTimeMinutes);
     if (servingsInput && recipe.servings != null) servingsInput.value = String(recipe.servings);
@@ -365,12 +366,14 @@ async function saveForm(originalRecipe: any): Promise<any> {
 
     // Meta fields
     const titleVal = (document.getElementById("edit-title") as HTMLInputElement)?.value.trim();
+    const summaryVal = (document.getElementById("edit-semantic-summary") as HTMLTextAreaElement)?.value.trim();
     const prepVal = (document.getElementById("edit-prep-time") as HTMLInputElement)?.value;
     const cookVal = (document.getElementById("edit-cook-time") as HTMLInputElement)?.value;
     const servingsVal = (document.getElementById("edit-servings") as HTMLInputElement)?.value;
     const yieldVal = (document.getElementById("edit-yield") as HTMLInputElement)?.value;
 
     if (titleVal) recipe.title = titleVal;
+    recipe.semantic_summary = summaryVal || undefined;
     recipe.prepTimeMinutes = prepVal !== "" ? parseInt(prepVal, 10) || null : null;
     recipe.cookTimeMinutes = cookVal !== "" ? parseInt(cookVal, 10) || null : null;
     recipe.servings = servingsVal !== "" ? parseInt(servingsVal, 10) || null : null;

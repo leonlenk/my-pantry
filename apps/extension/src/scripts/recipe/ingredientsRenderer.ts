@@ -96,9 +96,13 @@ export function renderIngredients(recipe: any, multiplier: number) {
             text = escapeHtml(ing.rawText || ing.item);
         }
 
-        // Note references as superscripts
-        if (ing.note_references?.length > 0) {
-            const refs = ing.note_references
+        // Note references as superscripts — only render refs that actually exist
+        const noteCount = recipe.notes?.length ?? 0;
+        const validRefs = (ing.note_references || []).filter(
+            (n: number) => n >= 1 && n <= noteCount
+        );
+        if (validRefs.length > 0) {
+            const refs = validRefs
                 .map(
                     (n: number) =>
                         `<a href="#recipe-note-${n}" style="color: var(--color-accent); text-decoration: none; font-size: 0.8em;">Note ${n}</a>`

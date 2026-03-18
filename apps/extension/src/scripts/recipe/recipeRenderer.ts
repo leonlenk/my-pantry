@@ -188,6 +188,13 @@ export function renderRecipe(recipe: any) {
                     renderIngredients(recipeState.currentRecipe, mult);
                 }
             });
+            batchInput.addEventListener("blur", (e) => {
+                const val = parseInt((e.target as HTMLInputElement).value, 10);
+                if (isNaN(val) || val < 1) {
+                    batchInput.value = recipeState.originalBatchSize.toString();
+                    renderIngredients(recipeState.currentRecipe, 1);
+                }
+            });
             batchInput.dataset.listenerAttached = "true";
         }
     }

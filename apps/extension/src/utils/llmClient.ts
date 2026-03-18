@@ -2,8 +2,8 @@
  * Shared BYOK LLM client utilities.
  *
  * Centralises the per-provider request building, fetch-with-timeout,
- * and response-text extraction so extractRecipeWithClaude and
- * askSubstitutionWithClaude don't duplicate ~80 lines of provider setup.
+ * and response-text extraction so extractRecipe and
+ * askSubstitution don't duplicate ~80 lines of provider setup.
  */
 
 declare const chrome: any;

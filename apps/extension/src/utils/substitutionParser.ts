@@ -50,7 +50,7 @@ export type SubstitutionResult = {
     }>;
 };
 
-export async function askSubstitutionWithClaude(
+export async function askSubstitution(
     recipeData: Recipe,
     userPrompt: string,
     apiKey: string,

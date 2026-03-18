@@ -6,6 +6,7 @@ import feather from "feather-icons";
 import { getAllRecipes, importRecipesLocally } from "../../utils/db";
 import type { Recipe } from "../../types/recipe";
 import { loadRecipes } from "./recipeRenderer";
+import { showToast } from "./modals";
 
 declare const chrome: any;
 
@@ -53,27 +54,38 @@ export function wireImportExport() {
             const recipes = JSON.parse(text);
 
             if (Array.isArray(recipes)) {
+                let embeddedCount = 0;
                 // Re-generate embeddings for any recipes that don't have them
                 for (const r of recipes) {
-                    if (!r.embedding) {
-                        const embeddingText = [
-                            r.title,
-                            r.semantic_summary || "",
-                            ...(r.ingredients?.map((i: any) => i.item) || []),
-                        ].filter(Boolean).join(". ");
+                    if (r.embedding) {
+                        embeddedCount++;
+                        continue;
+                    }
+                    const embeddingText = [
+                        r.title,
+                        r.semantic_summary || "",
+                        ...(r.ingredients?.map((i: any) => i.item) || []),
+                    ].filter(Boolean).join(". ");
 
-                        const embeddingResult = await chrome.runtime.sendMessage({
-                            type: "GENERATE_EMBEDDING",
-                            text: embeddingText,
-                        });
-                        if (embeddingResult.success && embeddingResult.embedding) {
-                            r.embedding = embeddingResult.embedding;
-                        }
+                    const embeddingResult = await chrome.runtime.sendMessage({
+                        type: "GENERATE_EMBEDDING",
+                        text: embeddingText,
+                    });
+                    if (embeddingResult.success && embeddingResult.embedding) {
+                        r.embedding = embeddingResult.embedding;
+                        embeddedCount++;
                     }
                 }
                 await importRecipesLocally(recipes as Recipe[]);
                 await loadRecipes();
                 importFile.value = "";
+
+                const n = recipes.length;
+                const missing = n - embeddedCount;
+                const msg = missing > 0
+                    ? `Imported ${n} recipe${n !== 1 ? "s" : ""} (${missing} without semantic search — embedding failed).`
+                    : `Imported ${n} recipe${n !== 1 ? "s" : ""} successfully.`;
+                showToast(msg, missing > 0 ? "info" : "success");
             } else {
                 alert("Invalid backup file format. Expected an array of recipes.");
             }

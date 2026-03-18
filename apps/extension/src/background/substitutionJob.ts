@@ -5,7 +5,8 @@
  * progressive status updates to the recipe page content script.
  */
 
-import { askSubstitutionWithClaude } from "../utils/substitutionParser";
+import { askSubstitution } from "../utils/substitutionParser";
+import { refreshSupabaseToken } from "../utils/authUtils";
 import { startKeepAlive, stopKeepAlive } from "./keepAlive";
 
 declare const chrome: any;
@@ -21,6 +22,16 @@ export async function executeSubstitutionInBackground(
 ): Promise<void> {
     try {
         startKeepAlive();
+
+        // Proactively refresh the Supabase token to avoid mid-request 401s
+        if (authMode === "cloud") {
+            const freshToken = await refreshSupabaseToken();
+            if (freshToken) {
+                apiKey = freshToken;
+            } else {
+                console.warn("[Auth] Could not refresh token; proceeding with existing key.");
+            }
+        }
 
         const mappedIngredients = recipeData.ingredients
             .map((ing: any, index: number) => `[ID: ${index}] - ${ing.item} (${ing.rawText})`)
@@ -60,7 +71,7 @@ export async function executeSubstitutionInBackground(
 
         let result;
         try {
-            result = await askSubstitutionWithClaude(recipeData, userPrompt, apiKey, llmModel, llmProvider, authMode);
+            result = await askSubstitution(recipeData, userPrompt, apiKey, llmModel, llmProvider, authMode);
         } finally {
             clearInterval(statusInterval);
         }

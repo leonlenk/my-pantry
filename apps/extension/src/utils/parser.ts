@@ -92,7 +92,7 @@ Constraints:
  * In cloud mode, proxies through the FastAPI backend.
  * In BYOK mode, calls the configured provider directly using llmClient helpers.
  */
-export async function extractRecipeWithClaude(
+export async function extractRecipe(
     extractedData: ExtractionResult,
     apiKey: string,
     model: string,

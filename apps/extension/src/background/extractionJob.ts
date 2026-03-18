@@ -6,7 +6,7 @@
  */
 
 import type { ExtractionResult } from "../utils/llmClient";
-import { extractRecipeWithClaude } from "../utils/parser";
+import { extractRecipe } from "../utils/parser";
 import { saveRecipeLocally } from "../utils/db";
 import { refreshSupabaseToken } from "../utils/authUtils";
 import { isCancelled, updateExtractionStatus } from "../utils/extractionSession";
@@ -112,7 +112,7 @@ export async function executeExtractionInBackground(
         console.log("[MyPantry] Sending request to LLM API...");
         await updateExtractionStatus(url, tabId, `Asking ${llmProvider} to process ~${formattedPayloadCount} tokens...`);
 
-        const { recipeData } = await extractRecipeWithClaude(extractedData, apiKey, llmModel, llmProvider, authMode);
+        const { recipeData } = await extractRecipe(extractedData, apiKey, llmModel, llmProvider, authMode);
 
         console.log("Successfully parsed recipe:", recipeData);
         await updateExtractionStatus(url, tabId, "Successfully extracted recipe data!");
@@ -136,11 +136,13 @@ export async function executeExtractionInBackground(
                 text: textToEmbed,
             });
 
+        let embeddingFailed = false;
         if (embeddingResult?.success && embeddingResult.embedding) {
             console.log(`[MyPantry] Embedding generated (${embeddingResult.embedding.length} dims).`);
             recipeData.embedding = embeddingResult.embedding;
         } else {
             console.warn("[MyPantry] Embedding failed, saving without vector:", embeddingResult?.error);
+            embeddingFailed = true;
         }
 
         if (await isCancelled(url)) {
@@ -153,7 +155,10 @@ export async function executeExtractionInBackground(
         await saveRecipeLocally(recipeData);
         console.log("[MyPantry] Saved to IndexedDB successfully.");
 
-        await updateExtractionStatus(url, tabId, "Recipe saved! Open Pantry to view.", false, true);
+        const savedMsg = embeddingFailed
+            ? "Recipe saved (no semantic search — embedding failed). Open Pantry to view."
+            : "Recipe saved! Open Pantry to view.";
+        await updateExtractionStatus(url, tabId, savedMsg, false, true);
     } catch (error: any) {
         console.error("Extraction error in background:", error);
         await updateExtractionStatus(url, tabId, `Error: ${error.message || "Unknown error occurred"}`, true, true);

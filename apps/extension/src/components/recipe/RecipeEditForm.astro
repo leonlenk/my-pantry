@@ -24,6 +24,15 @@ const plusIcon = feather.icons["plus"]?.toSvg({ width: 14, height: 14 }) || "";
                     placeholder="Recipe title"
                 />
             </div>
+            <div class="field-group edit-meta-full">
+                <label for="edit-semantic-summary">Description <span style="font-weight: normal; color: var(--color-text-muted); font-size: 0.85em;">(used for semantic search)</span></label>
+                <textarea
+                    id="edit-semantic-summary"
+                    rows="2"
+                    placeholder="A brief description of the recipe, e.g. 'A rich chocolate cake with a fudgy center'"
+                    style="width: 100%; resize: vertical;"
+                ></textarea>
+            </div>
             <div class="field-group">
                 <label for="edit-prep-time">Prep Time (minutes)</label>
                 <input
