@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.utils.logger import setup_logging
 from src.config import settings
-from src.routers import extract, substitute, auth, sync, privacy, home, share
+from src.routers import extract, substitute, sync, privacy, home, share
 from loguru import logger
 import uvicorn
 import os
@@ -49,7 +49,7 @@ api_router.include_router(extract.router)
 api_router.include_router(substitute.router)
 api_router.include_router(sync.router)
 api_router.include_router(share.api_router)
-api_router.include_router(auth.router, prefix="/oauth", tags=["oauth"])
+
 
 @api_router.get("/auth/callback", response_class=HTMLResponse)
 def auth_callback():
