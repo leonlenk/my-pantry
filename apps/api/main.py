@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -11,20 +12,22 @@ import os
 
 setup_logging()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f"CORS allowed origin: chrome-extension://{settings.extension_id}")
+    yield
+
 app = FastAPI(
     title="MyPantry Cloud API",
     docs_url="/api/docs",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 # Mount static files directory
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-@app.on_event("startup")
-def startup_event():
-    logger.info(f"CORS allowed origin: chrome-extension://{settings.extension_id}")
 
 app.add_middleware(
     CORSMiddleware,
