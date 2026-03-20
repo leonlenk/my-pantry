@@ -127,6 +127,16 @@ class TestExtractEndpoint:
 
         assert resp.status_code == 500
 
+    def test_extract_gemini_rate_limit_returns_503(self, client, mock_verify_jwt, mock_rate_limit):
+        """When Gemini is rate-limited, endpoint returns 503 with Retry-After header."""
+        from src.services.llm import LLMCapacityError
+        with patch("src.routers.extract.extract_recipe", side_effect=LLMCapacityError("Gemini 429")):
+            resp = client.post("/api/extract/", json={"payload": "html"})
+
+        assert resp.status_code == 503
+        assert "busy" in resp.json()["detail"].lower()
+        assert resp.headers.get("retry-after") == "10"
+
     # ---- request validation ------------------------------------------------
 
     def test_extract_missing_payload_field(self, client, mock_verify_jwt):
@@ -142,3 +152,19 @@ class TestExtractEndpoint:
             headers={"Content-Type": "application/json", "Authorization": "Bearer fake"},
         )
         assert resp.status_code == 422
+
+    def test_extract_validation_error_returns_500(self, client, mock_verify_jwt, mock_rate_limit):
+        """Pydantic ValidationError from schema mismatch returns 500 with safe message."""
+        from pydantic import BaseModel, ValidationError
+
+        class _M(BaseModel):
+            x: int
+
+        try:
+            _M.model_validate({"x": "not-a-number"})
+        except ValidationError as ve:
+            with patch("src.routers.extract.extract_recipe", side_effect=ve):
+                resp = client.post("/api/extract/", json={"payload": "html"})
+
+        assert resp.status_code == 500
+        assert "failed to extract" in resp.json()["detail"].lower()

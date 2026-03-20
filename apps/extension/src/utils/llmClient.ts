@@ -172,12 +172,27 @@ export function extractTextFromResult(result: any, provider: string): string {
         throw new Error(`LLM API Error: ${result.error.message || JSON.stringify(result.error)}`);
     }
     if (provider === "openrouter" || provider === "openai") {
-        return result.choices?.[0]?.message?.content || "";
+        const text = result.choices?.[0]?.message?.content;
+        if (!text) {
+            const finishReason = result.choices?.[0]?.finish_reason;
+            throw new Error(`LLM returned an empty response${finishReason ? ` (finish_reason: ${finishReason})` : ""}. Try a different model.`);
+        }
+        return text;
     }
     if (provider === "google") {
-        return result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+            const finishReason = result.candidates?.[0]?.finishReason;
+            throw new Error(`LLM returned an empty response${finishReason ? ` (finish_reason: ${finishReason})` : ""}. The request may have been blocked by safety filters.`);
+        }
+        return text;
     }
-    return result.content?.[0]?.text || "";
+    const text = result.content?.[0]?.text;
+    if (!text) {
+        const stopReason = result.stop_reason;
+        throw new Error(`LLM returned an empty response${stopReason ? ` (stop_reason: ${stopReason})` : ""}. Try a different model.`);
+    }
+    return text;
 }
 
 /** Extracts and parses the first JSON object found in a text string. */
@@ -186,6 +201,9 @@ export function extractTextFromResult(result: any, provider: string): string {
  * Handles 413 (payload too large) and 429 (rate limit) with reset time.
  */
 export async function parseCloudApiError(response: Response): Promise<Error> {
+    if (response.status === 503) {
+        return new Error("The server is busy right now. Please try again in a moment.");
+    }
     if (response.status === 413) {
         return new Error(
             "Payload too large. The page content exceeds the limit after cleanup. Try a page with a dedicated recipe card."

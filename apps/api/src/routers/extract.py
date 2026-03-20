@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.config import settings
 from src.dependencies.auth import verify_jwt
 from src.dependencies.rate_limit import check_rate_limit_and_telemetry
-from src.services.llm import extract_recipe
+from src.services.llm import extract_recipe, LLMCapacityError
 from pydantic import BaseModel
 from loguru import logger
 import traceback
@@ -29,6 +29,12 @@ def extract_endpoint(request: ExtractRequest, user_id: str = Depends(verify_jwt)
     try:
         recipe = extract_recipe(request.payload)
         return {"recipe": recipe.model_dump()}
+    except LLMCapacityError:
+        raise HTTPException(
+            status_code=503,
+            detail="Server is busy. Please try again in a moment.",
+            headers={"Retry-After": "10"},
+        )
     except Exception as e:
         logger.error(f"Extraction failed: {traceback.format_exc()}")
         # Only surface a generic message — internal details stay in the server logs.

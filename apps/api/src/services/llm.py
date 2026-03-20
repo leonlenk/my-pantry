@@ -1,9 +1,15 @@
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 from src.config import settings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional
 from loguru import logger
+
+
+class LLMCapacityError(Exception):
+    """Raised when the upstream LLM API is rate-limited (e.g. Gemini 429)."""
+    pass
 
 client = genai.Client(
     api_key=settings.gemini_api_key,
@@ -76,7 +82,17 @@ Payload:
             # Log candidates for debug insight (safety blocks etc.)
             finish_reason = response.candidates[0].finish_reason if response.candidates else "unknown"
             raise ValueError(f"Empty response from LLM (finish_reason={finish_reason})")
-        return Recipe.model_validate_json(response.text)
+        try:
+            return Recipe.model_validate_json(response.text)
+        except ValidationError as e:
+            logger.error(f"Gemini returned JSON that doesn't match Recipe schema: {e}")
+            raise
+    except ClientError as e:
+        if e.code == 429:
+            logger.warning(f"Gemini rate limit hit during extraction: {e}")
+            raise LLMCapacityError("Gemini API rate limit reached") from e
+        logger.error(f"Gemini client error during extraction: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error extracting recipe: {e}")
         raise
@@ -98,7 +114,17 @@ def get_substitution(recipe_context: dict, target_ingredient: str) -> Substituti
         if not response.text:
             finish_reason = response.candidates[0].finish_reason if response.candidates else "unknown"
             raise ValueError(f"Empty response from LLM (finish_reason={finish_reason})")
-        return Substitution.model_validate_json(response.text)
+        try:
+            return Substitution.model_validate_json(response.text)
+        except ValidationError as e:
+            logger.error(f"Gemini returned JSON that doesn't match Substitution schema: {e}")
+            raise
+    except ClientError as e:
+        if e.code == 429:
+            logger.warning(f"Gemini rate limit hit during substitution: {e}")
+            raise LLMCapacityError("Gemini API rate limit reached") from e
+        logger.error(f"Gemini client error during substitution: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error getting substitution: {e}")
         raise

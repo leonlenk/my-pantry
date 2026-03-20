@@ -95,10 +95,16 @@ Provide the precise JSON response.
             });
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error("Session expired. Please sign out and sign in again to continue.");
+                }
                 throw await parseCloudApiError(response);
             }
 
             const cloudData = await response.json();
+            if (!cloudData.substitution) {
+                throw new Error("No substitution returned from server.");
+            }
             const result: SubstitutionResult = {
                 thoughtProcess: cloudData.substitution.reasoning,
                 substitutions: [
@@ -146,8 +152,8 @@ Provide the precise JSON response.
             throw new Error("Missing required fields in parsed JSON.");
         }
         return parsed;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to parse LLM substitution response:", jsonContent);
-        throw new Error("LLM returned malformed JSON");
+        throw new Error(`LLM returned malformed JSON: ${error.message}`);
     }
 }
