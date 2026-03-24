@@ -25,6 +25,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class OriginValidationMiddleware(BaseHTTPMiddleware):
+    """Reject requests to protected API routes whose Origin header is not in the
+    CORS allowlist.  This closes the gap where non-browser clients (curl, scripts)
+    bypass CORS by simply not sending a preflight — they still set an Origin that
+    we can validate here."""
+
+    _PROTECTED_PREFIXES = (
+        "/api/extract",
+        "/api/substitute",
+        "/api/sync",
+        "/api/share",
+    )
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        # Let CORS middleware handle OPTIONS preflights normally.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        if request.url.path.startswith(self._PROTECTED_PREFIXES):
+            origin = request.headers.get("origin", "")
+            if origin not in _build_cors_origins():
+                logger.warning(
+                    f"Rejected request from disallowed origin '{origin}' "
+                    f"to {request.url.path}"
+                )
+                return Response(status_code=403, content="Forbidden")
+
+        return await call_next(request)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     origins = _build_cors_origins()
@@ -68,6 +98,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
+app.add_middleware(OriginValidationMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 api_router = APIRouter(prefix="/api")
