@@ -8,7 +8,7 @@
 import type { ExtractionResult } from "../utils/llmClient";
 import { extractRecipe } from "../utils/parser";
 import { saveRecipeLocally } from "../utils/db";
-import { refreshSupabaseToken } from "../utils/authUtils";
+import { refreshSupabaseToken, isTokenExpired } from "../utils/authUtils";
 import { isCancelled, updateExtractionStatus } from "../utils/extractionSession";
 import { startKeepAlive, stopKeepAlive } from "./keepAlive";
 import { setupOffscreenDocument } from "./offscreen";
@@ -32,15 +32,14 @@ export async function executeExtractionInBackground(
             const freshToken = await refreshSupabaseToken();
             if (freshToken) {
                 apiKey = freshToken;
+            } else if (isTokenExpired(apiKey)) {
+                throw new Error("Session expired. Please sign out and sign in again.");
             } else {
                 console.warn("[Auth] Could not refresh token; proceeding with existing key.");
             }
         }
 
         await updateExtractionStatus(url, tabId, "Extracting page content...");
-        console.log(
-            `[MyPantry] Starting background extraction for ${url} (tab ${tabId}) with ${llmProvider} model: ${llmModel} (mode: ${authMode})`
-        );
 
         // Delegate extraction to the content script (JSON-LD → DOM-target → Readability cascade)
         const sendExtractMessage = (): Promise<{
@@ -61,7 +60,6 @@ export async function executeExtractionInBackground(
         let response = await sendExtractMessage();
 
         if (response.noListener) {
-            console.log("[MyPantry] Content script not present, injecting...");
             try {
                 await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
                 await new Promise((r) => setTimeout(r, 100));
@@ -83,18 +81,14 @@ export async function executeExtractionInBackground(
         const recipeTitle = (extractedData as any)?.jsonLd?.name || undefined;
 
         if (extractedData.source === "json-ld") {
-            const hasText = !!extractedData.recipeText;
-            console.log(`[MyPantry] JSON-LD schema found (Contains dom text? ${hasText})`);
             await updateExtractionStatus(url, tabId, "Analyzing structured recipe data...", false, false, recipeTitle);
         } else if (extractedData.source === "dom-target") {
             const charCount = extractedData.recipeText?.length ?? 0;
             const formattedCount = new Intl.NumberFormat().format(charCount);
-            console.log(`[MyPantry] Extracted recipe card only`, `Text length: ${charCount} chars.`);
             await updateExtractionStatus(url, tabId, `Processing localized recipe card (${formattedCount} chars)...`, false, false, recipeTitle);
         } else {
             const charCount = extractedData.textContent?.length ?? 0;
             const formattedCount = new Intl.NumberFormat().format(charCount);
-            console.log("[MyPantry] Used comprehensive Readability fallback.", `Text length: ${charCount} chars.`);
             const msg = charCount > 10000
                 ? `Processing large text (${formattedCount} chars)...`
                 : `Reading page text (${formattedCount} chars)...`;
@@ -110,15 +104,12 @@ export async function executeExtractionInBackground(
         const approxTokens = Math.ceil((baseCount + 1500) / 4);
         const formattedPayloadCount = new Intl.NumberFormat().format(approxTokens);
 
-        console.log("[MyPantry] Sending request to LLM API...");
         await updateExtractionStatus(url, tabId, `Asking ${llmProvider} to process ~${formattedPayloadCount} tokens...`);
 
         const { recipeData } = await extractRecipe(extractedData, apiKey, llmModel, llmProvider, authMode);
 
-        console.log("Successfully parsed recipe:", recipeData);
         await updateExtractionStatus(url, tabId, "Successfully extracted recipe data!");
         await updateExtractionStatus(url, tabId, "Generating embedding vector...");
-        console.log("[MyPantry] Requesting embedding...");
 
         const textToEmbed = [
             recipeData.title,
@@ -139,7 +130,6 @@ export async function executeExtractionInBackground(
 
         let embeddingFailed = false;
         if (embeddingResult?.success && embeddingResult.embedding) {
-            console.log(`[MyPantry] Embedding generated (${embeddingResult.embedding.length} dims).`);
             recipeData.embedding = embeddingResult.embedding;
         } else {
             console.warn("[MyPantry] Embedding failed, saving without vector:", embeddingResult?.error);
@@ -147,14 +137,11 @@ export async function executeExtractionInBackground(
         }
 
         if (await isCancelled(url)) {
-            console.log(`[MyPantry] Extraction for ${url} was cancelled, not saving.`);
             return;
         }
 
         await updateExtractionStatus(url, tabId, "Saving to local database...");
-        console.log("[MyPantry] Saving recipe to IndexedDB...");
         await saveRecipeLocally(recipeData);
-        console.log("[MyPantry] Saved to IndexedDB successfully.");
 
         const savedMsg = embeddingFailed
             ? "Recipe saved (no semantic search — embedding failed). Open Pantry to view."

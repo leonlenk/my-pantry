@@ -17,8 +17,9 @@ Endpoint summary:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Any
+from datetime import datetime, timezone
 import json
 from loguru import logger
 import traceback
@@ -30,6 +31,13 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 
 TABLE = "recipes"
 
+# Max serialised size of a single recipe payload (512 KB)
+_MAX_RECIPE_BYTES = 512 * 1024
+# Max number of recipes in a single batch import
+_MAX_IMPORT_COUNT = 100
+# Max total size of a batch import payload (5 MB)
+_MAX_BATCH_BYTES = 5 * 1024 * 1024
+
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -40,11 +48,30 @@ class SaveRecipeRequest(BaseModel):
     # by the caller — it is not stored in the cloud).
     recipe: dict[str, Any]
 
+    @field_validator("recipe")
+    @classmethod
+    def validate_recipe(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(v.get("id"), str) or not v["id"]:
+            raise ValueError("Recipe must have a non-empty string `id`")
+        if len(json.dumps(v)) > _MAX_RECIPE_BYTES:
+            raise ValueError(f"Recipe payload exceeds {_MAX_RECIPE_BYTES // 1024} KB limit")
+        return v
+
 
 class ImportRecipesRequest(BaseModel):
     # List of Recipe objects from the client (embedding field must be excluded
     # by the caller).
     recipes: list[dict[str, Any]]
+
+    @field_validator("recipes")
+    @classmethod
+    def validate_recipes(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if len(v) > _MAX_IMPORT_COUNT:
+            raise ValueError(f"Batch import cannot exceed {_MAX_IMPORT_COUNT} recipes")
+        total_bytes = len(json.dumps(v))
+        if total_bytes > _MAX_BATCH_BYTES:
+            raise ValueError(f"Total batch payload exceeds {_MAX_BATCH_BYTES // (1024 * 1024)} MB limit")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -58,17 +85,14 @@ def save_recipe(request: SaveRecipeRequest, user_id: str = Depends(verify_jwt)):
     The embedding is intentionally excluded — the cloud is a pure backup store.
     """
     recipe = request.recipe
-    recipe_id = recipe.get("id")
-    if not recipe_id:
-        raise HTTPException(status_code=400, detail="Recipe must have an `id` field.")
-
+    recipe_id = recipe["id"]  # validated non-empty by SaveRecipeRequest
     recipe_json = {k: v for k, v in recipe.items() if k != "embedding"}
 
     row = {
         "id": recipe_id,
         "user_id": user_id,
         "recipe_json": recipe_json,
-        "updated_at": "now()",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     try:
@@ -78,7 +102,7 @@ def save_recipe(request: SaveRecipeRequest, user_id: str = Depends(verify_jwt)):
         return {"success": True, "id": recipe_id}
     except Exception as e:
         logger.error(f"[Sync] Save failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to save recipe: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save recipe.")
 
 
 @router.post("/import")
@@ -90,31 +114,35 @@ def import_recipes(request: ImportRecipesRequest, user_id: str = Depends(verify_
         return {"success": True, "count": 0}
 
     rows = []
+    skipped = 0
     for recipe in request.recipes:
         recipe_id = recipe.get("id")
         if not recipe_id:
+            skipped += 1
             continue
-            
+
         recipe_json = {k: v for k, v in recipe.items() if k != "embedding"}
         rows.append({
             "id": recipe_id,
             "user_id": user_id,
             "recipe_json": recipe_json,
-            "updated_at": "now()",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         })
 
     if not rows:
-        return {"success": True, "count": 0}
+        return {"success": True, "count": 0, "skipped": skipped}
 
     try:
         client = get_supabase_client()
         # upsert takes a list of dicts for bulk operations
         client.table(TABLE).upsert(rows, on_conflict="id").execute()
+        if skipped:
+            logger.warning(f"[Sync] Skipped {skipped} recipe(s) missing `id` for user {user_id}")
         logger.info(f"[Sync] Bulk upserted {len(rows)} recipes for user {user_id}")
-        return {"success": True, "count": len(rows)}
+        return {"success": True, "count": len(rows), "skipped": skipped}
     except Exception as e:
         logger.error(f"[Sync] Import failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to import recipes: {e}")
+        raise HTTPException(status_code=500, detail="Failed to import recipes.")
 
 
 @router.get("/latest")
@@ -139,11 +167,16 @@ def get_latest_timestamp(user_id: str = Depends(verify_jwt)):
         return {"latest_updated_at": latest}
     except Exception as e:
         logger.error(f"[Sync] Latest timestamp query failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to get latest timestamp: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get latest timestamp.")
 
 
 @router.get("/list")
 def list_recipes(user_id: str = Depends(verify_jwt), since: str | None = None):
+    if since is not None:
+        try:
+            datetime.fromisoformat(since)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="'since' must be a valid ISO-8601 datetime string.")
     """
     Return recipe JSON blobs for the authenticated user, ordered newest-first.
 
@@ -185,11 +218,14 @@ def list_recipes(user_id: str = Depends(verify_jwt), since: str | None = None):
                 
                 offset += chunk_size
                 
-        except Exception as e:
+        except Exception:
             logger.error(f"[Sync] List stream generator failed at offset {offset}: {traceback.format_exc()}")
-            # If we fail mid-stream, the stream will abruptly end, forcing the client parser to 
-            # hard-fail on invalid JSON, which forces `.catch()` on the frontend gracefully.
-            
+            # Yield a well-formed error sentinel so the client receives valid JSON
+            # and can distinguish a truncation error from an empty result set.
+            if not first_item:
+                yield b','
+            yield json.dumps({"__error": "stream_failed"}).encode("utf-8")
+
         yield b']}'
 
     logger.info(f"[Sync] Streaming recipes for user {user_id} (since={since or 'all'})")
@@ -209,4 +245,4 @@ def delete_recipe(recipe_id: str, user_id: str = Depends(verify_jwt)):
         return {"success": True, "id": recipe_id}
     except Exception as e:
         logger.error(f"[Sync] Delete failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete recipe: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete recipe.")

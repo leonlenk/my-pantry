@@ -13,13 +13,13 @@ class TestCorsPolicy:
         resp = client.options(
             "/api/extract/",
             headers={
-                "Origin": "chrome-extension://fake-extension-id",
+                "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
                 "Access-Control-Request-Method": "POST",
             },
         )
         # CORS middleware should respond with the Access-Control-Allow-Origin header
         allow_origin = resp.headers.get("access-control-allow-origin", "")
-        assert "chrome-extension://fake-extension-id" in allow_origin
+        assert "chrome-extension://abcdefghijklmnopabcdefghijklmnop" in allow_origin
 
     def test_localhost_origin_allowed(self, client):
         """Preflight from localhost is accepted."""
@@ -62,7 +62,7 @@ class TestCorsPolicy:
         resp = client.options(
             "/api/extract/",
             headers={
-                "Origin": "chrome-extension://fake-extension-id",
+                "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
                 "Access-Control-Request-Method": "POST",
             },
         )

@@ -7,7 +7,7 @@
  * fall-through to an old encrypted value.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Replicated from popupController.ts
@@ -181,5 +181,157 @@ describe("key pipeline integrity", () => {
         const roundTripped = JSON.parse(JSON.stringify(message));
         expect(roundTripped.apiKey).toBe(anthropicKey);
         expect(roundTripped.apiKey.length).toBe(anthropicKey.length);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Replicated crypto helpers from byok.ts (using the fallback extension ID)
+// ---------------------------------------------------------------------------
+
+const _BYOK_SALT = "mypantry-byok-salt-v1";
+const _BYOK_ITERATIONS = 100_000;
+
+async function _deriveTestCryptoKey(): Promise<CryptoKey> {
+    // Uses the same fallback as byok.ts when chrome.runtime.id is unavailable
+    const password = "mypantry-extension-fallback";
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"],
+    );
+    return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: new TextEncoder().encode(_BYOK_SALT), iterations: _BYOK_ITERATIONS, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"],
+    );
+}
+
+async function testEncryptApiKey(plaintext: string): Promise<string> {
+    const key = await _deriveTestCryptoKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
+    const combined = new Uint8Array(12 + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), 12);
+    return btoa(String.fromCharCode(...combined));
+}
+
+async function testDecryptApiKey(ciphertext: string): Promise<string | null> {
+    try {
+        const key = await _deriveTestCryptoKey();
+        const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: combined.slice(0, 12) }, key, combined.slice(12));
+        return new TextDecoder().decode(decrypted);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Replicates getByokApiKey() from byok.ts with injected storage dependencies
+ * so the migration path can be tested without chrome.storage.
+ */
+async function simulateGetByokApiKey(
+    storage: { encryptedApiKey?: string | null; plaintextApiKey?: unknown },
+    storageSetter: (v: Record<string, unknown>) => void,
+    encryptFn: (s: string) => Promise<string> = testEncryptApiKey,
+): Promise<string | null> {
+    if (storage.encryptedApiKey) {
+        return testDecryptApiKey(storage.encryptedApiKey);
+    }
+    const plain = storage.plaintextApiKey;
+    if (plain && typeof plain === "string" && plain.length > 0 && plain.length <= 300) {
+        try {
+            const encrypted = await encryptFn(plain);
+            storageSetter({ encryptedApiKey: encrypted, plaintextApiKey: null });
+        } catch {
+            storageSetter({ plaintextApiKey: null });
+            return null;
+        }
+        return plain;
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// Tests: plaintext → encrypted migration path (getByokApiKey)
+// ---------------------------------------------------------------------------
+
+describe("getByokApiKey migration path", () => {
+    const testKey = "sk-ant-api03-" + "A".repeat(93);
+
+    it("returns the plaintext key and migrates to encrypted storage", async () => {
+        const saved: Record<string, unknown> = {};
+        const result = await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: testKey },
+            (v) => Object.assign(saved, v),
+        );
+        expect(result).toBe(testKey);
+        expect(typeof saved.encryptedApiKey).toBe("string");
+        expect((saved.encryptedApiKey as string).length).toBeGreaterThan(0);
+        expect(saved.plaintextApiKey).toBeNull();
+    });
+
+    it("encrypted blob round-trips back to the original key", async () => {
+        const saved: Record<string, unknown> = {};
+        await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: testKey },
+            (v) => Object.assign(saved, v),
+        );
+        const decrypted = await testDecryptApiKey(saved.encryptedApiKey as string);
+        expect(decrypted).toBe(testKey);
+    });
+
+    it("uses the encrypted key on second access (no re-migration)", async () => {
+        const saved: Record<string, unknown> = {};
+        await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: testKey },
+            (v) => Object.assign(saved, v),
+        );
+        // Second call: storage now has encryptedApiKey
+        const setterSpy = vi.fn();
+        const result2 = await simulateGetByokApiKey(
+            { encryptedApiKey: saved.encryptedApiKey as string, plaintextApiKey: null },
+            setterSpy,
+        );
+        expect(result2).toBe(testKey);
+        expect(setterSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns null and clears storage when encryption fails", async () => {
+        const saved: Record<string, unknown> = {};
+        const failingEncrypt = async (_: string): Promise<string> => { throw new Error("crypto failure"); };
+        const result = await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: testKey },
+            (v) => Object.assign(saved, v),
+            failingEncrypt,
+        );
+        expect(result).toBeNull();
+        expect(saved.plaintextApiKey).toBeNull();
+        expect(saved.encryptedApiKey).toBeUndefined();
+    });
+
+    it("returns null when plaintextApiKey exceeds 300 chars", async () => {
+        const setter = vi.fn();
+        const result = await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: "x".repeat(301) },
+            setter,
+        );
+        expect(result).toBeNull();
+        expect(setter).not.toHaveBeenCalled();
+    });
+
+    it("returns null when no key is stored", async () => {
+        const setter = vi.fn();
+        const result = await simulateGetByokApiKey(
+            { encryptedApiKey: null, plaintextApiKey: null },
+            setter,
+        );
+        expect(result).toBeNull();
+        expect(setter).not.toHaveBeenCalled();
     });
 });

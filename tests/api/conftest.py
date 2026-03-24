@@ -22,16 +22,18 @@ sys.path.insert(0, os.path.abspath(API_ROOT))
 _ENV_OVERRIDES = {
     "SUPABASE_URL": "https://fake.supabase.co",
     "SUPABASE_SERVICE_ROLE_KEY": "fake-service-role-key",
-    "SUPABASE_JWT_SECRET": "fake-jwt-secret",
     "UPSTASH_REDIS_REST_URL": "https://fake-redis.upstash.io",
     "UPSTASH_REDIS_REST_TOKEN": "fake-redis-token",
     "GEMINI_API_KEY": "fake-gemini-key",
-    "EXTENSION_ID": "fake-extension-id",
+    # Must be 32 lowercase [a-p] characters — valid Chrome extension ID format.
+    "EXTENSION_ID": "abcdefghijklmnopabcdefghijklmnop",
     "MAX_PAYLOAD_CHARS": "200",
     "EXTRACT_DAILY_LIMIT": "3",
     "EXTRACT_WEEKLY_LIMIT": "5",
     "SUBSTITUTE_DAILY_LIMIT": "3",
     "SUBSTITUTE_WEEKLY_LIMIT": "5",
+    # Enable localhost CORS for tests that verify preflight from http://localhost
+    "CORS_ALLOW_LOCALHOST": "true",
 }
 
 
@@ -112,7 +114,8 @@ def mock_verify_jwt(app):
 def mock_rate_limit():
     """Patches check_rate_limit_and_telemetry at each router's import site."""
     with patch("src.routers.extract.check_rate_limit_and_telemetry") as m_extract, \
-         patch("src.routers.substitute.check_rate_limit_and_telemetry") as m_substitute:
+         patch("src.routers.substitute.check_rate_limit_and_telemetry") as m_substitute, \
+         patch("src.routers.share.check_rate_limit_and_telemetry") as m_share:
         yield m_extract
 
 

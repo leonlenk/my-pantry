@@ -31,12 +31,16 @@ export interface LocalStorage {
     // LLM configuration
     llmProvider: "google" | "claude" | "openai" | "openrouter";
     llmModel: string;
-    /** Plaintext BYOK API key supplied by the user */
+    /** AES-GCM encrypted BYOK API key (preferred storage format) */
+    encryptedApiKey: string | null;
+    /** @deprecated Plaintext fallback — read for migration only; new saves use encryptedApiKey */
     plaintextApiKey: string | null;
 
     // Runtime config
     apiUrl: string;
     lastSyncAt: string;
+    /** Set when the last cloud sync attempt failed; null on success */
+    syncError: string | null;
     /** Cache of recipe source URLs already saved — used for the "Already Saved" badge */
     savedUrls: string[];
 }
@@ -93,6 +97,7 @@ export function removeLocal(keys: LocalKey | LocalKey[]): Promise<void> {
  */
 export const AUTH_KEYS: LocalKey[] = [
     "setupComplete",
+    "encryptedApiKey",
     "plaintextApiKey",
     "supabaseToken",
     "supabaseRefreshToken",

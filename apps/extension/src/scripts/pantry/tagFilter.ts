@@ -11,6 +11,7 @@ import feather from "feather-icons";
 import type { Recipe } from "../../types/recipe";
 import { pantryState } from "./pantryState";
 import { LS } from "../../utils/storage";
+import { escapeHtml } from "../../utils/conversions";
 
 const searchBadgesContainer = document.getElementById("search-badges");
 const searchInput = document.getElementById("semantic-search") as HTMLInputElement;
@@ -48,7 +49,7 @@ export function renderSearchBadges() {
         badge.className = "search-badge";
         const displayTag = tag.length > MAX_TAG_LENGTH ? tag.substring(0, MAX_TAG_LENGTH) + "..." : tag;
         badge.innerHTML = `
-            <span title="${tag}">${displayTag}</span>
+            <span title="${escapeHtml(tag)}">${escapeHtml(displayTag)}</span>
             <button data-index="${idx}" title="Remove tag">
                 ${feather.icons["x"]?.toSvg({ width: 12, height: 12 }) || "x"}
             </button>
@@ -77,7 +78,7 @@ export function renderSearchBadges() {
             const item = document.createElement("div");
             item.className = "more-tag-item";
             item.innerHTML = `
-                <span title="${tag}">${tag}</span>
+                <span title="${escapeHtml(tag)}">${escapeHtml(tag)}</span>
                 <button title="Remove tag">
                     ${feather.icons["x"]?.toSvg({ width: 12, height: 12 }) || "x"}
                 </button>

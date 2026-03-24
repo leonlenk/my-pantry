@@ -19,7 +19,7 @@
  */
 
 import { pantryState, VIEW_MODE_KEY, UNIT_PREFERENCE_KEY } from "./pantryState";
-import { getLocal, LS } from "../../utils/storage";
+import { getLocal, setLocal, LS } from "../../utils/storage";
 import { MSG } from "../../utils/messages";
 import { loadRecipes } from "./recipeRenderer";
 import { wireSearchHandlers } from "./searchManager";
@@ -27,6 +27,7 @@ import { wireSelectionControls } from "./selectionManager";
 import { wireCancelExtractionHandler, wireExtractionListener } from "./extractionManager";
 import { wireImportExport } from "./importExport";
 import { closeTagPopover } from "./tagPopover";
+import { showToast } from "./modals";
 
 declare const chrome: any;
 
@@ -38,6 +39,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!setupComplete) {
             window.location.href = "setup.html";
             return;
+        }
+
+        // Surface any pending cloud sync failure from the last save/import
+        const { syncError } = await getLocal(["syncError"]);
+        if (syncError) {
+            showToast(`Sync issue: ${syncError}`, "error", 6000);
+            await setLocal({ syncError: null });
         }
 
         // Silent background sync when cloud is ahead of local
@@ -55,13 +63,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const cloudIsAhead = !lastSyncAt || latestRes.latest_updated_at > lastSyncAt;
                     if (!cloudIsAhead) return;
 
-                    console.log("[Pantry] Cloud is ahead of local — fetching delta...");
-
                     const syncRes: { success: boolean; merged: number } =
                         await chrome.runtime.sendMessage({ type: MSG.syncFromCloud, since: lastSyncAt });
 
                     if (syncRes.success && syncRes.merged > 0) {
-                        console.log(`[Pantry] Silently merged ${syncRes.merged} new recipe(s) from cloud.`);
                         await loadRecipes();
                     }
                 } catch (err) {
@@ -109,6 +114,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Close overflow tag popover when clicking outside
     document.addEventListener("click", () => closeTagPopover());
+
+    // Show a toast when IndexedDB storage is nearly full
+    document.addEventListener("db:storageWarning", (e: Event) => {
+        const { usedMb, quotaMb } = (e as CustomEvent).detail;
+        showToast(`Your local recipe storage is nearly full (${usedMb} MB of ${quotaMb} MB). Export a backup, then delete some recipes to free space.`, "error", 8000);
+    });
 
     // ── Unit preference dropdown ───────────────────────────────────────────────
     const unitPreferenceDropdown = document.getElementById("pantry-unit-pref");

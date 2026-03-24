@@ -53,14 +53,15 @@ class TestGetSupabaseClient:
              patch.object(supabase_client, "create_client", return_value=mock_instance) as mock_create:
             mock_settings.supabase_service_role_key = "service-role-key"
             mock_settings.supabase_url = "https://fake.supabase.co"
+            mock_settings.supabase_request_timeout = 10
 
             result = supabase_client.get_supabase_client()
 
         assert result is mock_instance
-        mock_create.assert_called_once_with(
-            "https://fake.supabase.co",
-            "service-role-key",
-        )
+        # create_client is now called with url, key, and options= — check positional args only
+        call_args = mock_create.call_args
+        assert call_args.args[0] == "https://fake.supabase.co"
+        assert call_args.args[1] == "service-role-key"
 
     def test_result_is_cached(self):
         """Repeated calls return the same cached instance without calling create_client again."""
@@ -72,6 +73,7 @@ class TestGetSupabaseClient:
              patch.object(supabase_client, "create_client", return_value=mock_instance) as mock_create:
             mock_settings.supabase_service_role_key = "service-role-key"
             mock_settings.supabase_url = "https://fake.supabase.co"
+            mock_settings.supabase_request_timeout = 10
 
             r1 = supabase_client.get_supabase_client()
             r2 = supabase_client.get_supabase_client()

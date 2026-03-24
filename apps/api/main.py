@@ -1,21 +1,53 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from src.utils.logger import setup_logging
 from src.config import settings
 from src.routers import extract, substitute, sync, privacy, home, share
+from src.dependencies.auth import get_supabase_public_key
 from loguru import logger
 import uvicorn
 import os
 
 setup_logging()
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"CORS allowed origin: chrome-extension://{settings.extension_id}")
+    origins = _build_cors_origins()
+    logger.info(f"CORS allowed origins: {origins}")
+    # Validate the Supabase public key is present at startup so auth failures
+    # are caught immediately rather than on the first authenticated request.
+    get_supabase_public_key()
     yield
+
+
+def _build_cors_origins() -> list[str]:
+    origins = [
+        f"chrome-extension://{settings.extension_id}",
+        "https://mypantry.dev",
+    ]
+    if settings.cors_allow_localhost:
+        origins += [
+            "http://localhost",
+            "http://127.0.0.1",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
+    return origins
 
 app = FastAPI(
     title="MyPantry Cloud API",
@@ -31,18 +63,12 @@ if os.path.isdir(static_dir):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        f"chrome-extension://{settings.extension_id}",
-        "https://mypantry.dev",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000"
-    ],
+    allow_origins=_build_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(extract.router)

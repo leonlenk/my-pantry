@@ -1,5 +1,98 @@
 import { getLocal, setLocal } from "./storage";
 
+declare const chrome: any;
+
+// ─── BYOK key encryption (AES-GCM, key derived from extension ID via PBKDF2) ──
+
+const _BYOK_SALT = "mypantry-byok-salt-v1";
+const _BYOK_ITERATIONS = 100_000;
+
+async function _deriveByokCryptoKey(): Promise<CryptoKey> {
+    const password =
+        typeof chrome !== "undefined" && chrome.runtime?.id
+            ? chrome.runtime.id
+            : "mypantry-extension-fallback";
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"],
+    );
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: new TextEncoder().encode(_BYOK_SALT),
+            iterations: _BYOK_ITERATIONS,
+            hash: "SHA-256",
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"],
+    );
+}
+
+/** Encrypts a plaintext API key; returns a base64-encoded IV+ciphertext blob. */
+export async function encryptApiKey(plaintext: string): Promise<string> {
+    const key = await _deriveByokCryptoKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(plaintext),
+    );
+    const combined = new Uint8Array(12 + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), 12);
+    return btoa(String.fromCharCode(...combined));
+}
+
+/** Decrypts a base64-encoded blob produced by encryptApiKey; returns null on failure. */
+export async function decryptApiKey(ciphertext: string): Promise<string | null> {
+    try {
+        const key = await _deriveByokCryptoKey();
+        const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
+        const iv = combined.slice(0, 12);
+        const data = combined.slice(12);
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+        return new TextDecoder().decode(decrypted);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Returns the BYOK API key, preferring the encrypted form.
+ * Migrates plaintext keys to encrypted storage on first access.
+ * Returns null if no key is configured.
+ */
+export async function getByokApiKey(): Promise<string | null> {
+    const data = await getLocal(["encryptedApiKey", "plaintextApiKey"]);
+
+    if (data.encryptedApiKey) {
+        return decryptApiKey(data.encryptedApiKey);
+    }
+
+    // Migration path: re-save as encrypted and clear plaintext
+    const plain = data.plaintextApiKey;
+    if (plain && typeof plain === "string" && plain.length > 0 && plain.length <= 300) {
+        try {
+            const encrypted = await encryptApiKey(plain);
+            await setLocal({ encryptedApiKey: encrypted, plaintextApiKey: null });
+        } catch (err) {
+            console.warn("[BYOK] Encryption of plaintext API key failed; clearing stored key:", err);
+            // Remove the plaintext key from storage rather than leaving it in the clear.
+            // The user will be prompted to re-enter their key on next use.
+            await setLocal({ plaintextApiKey: null });
+            return null;
+        }
+        return plain;
+    }
+
+    return null;
+}
+
 const hardcodedPricing: Record<string, string> = {
     // Google
     "models/gemini-2.5-flash": "Cheaper",
@@ -75,7 +168,9 @@ export async function fetchModels(
             }).join("");
 
         } else if (provider === "google") {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+                headers: { "x-goog-api-key": apiKey },
+            });
             if (!res.ok) throw new Error("Invalid API Key or network error");
             const data = await res.json();
 
@@ -135,15 +230,18 @@ export async function fetchModels(
     }
 }
 
-export async function loadByokSettings(idPrefix: string, apiKey: string) {
+export async function loadByokSettings(idPrefix: string, apiKey?: string) {
     const selectProvider = document.getElementById(`${idPrefix}select-provider`) as HTMLSelectElement | null;
     const selectModel = document.getElementById(`${idPrefix}select-model`) as HTMLSelectElement | null;
     const inputApiKey = document.getElementById(`${idPrefix}input-api-key`) as HTMLInputElement | null;
 
     if (!selectProvider || !selectModel) return;
 
+    // Resolve the key: use the passed value, or fall back to decrypting from storage
+    const resolvedKey = apiKey ?? await getByokApiKey() ?? "";
+
     // Stash the stored key so provider-change handlers can use it when the input is left blank
-    if (inputApiKey && apiKey) inputApiKey.dataset.storedKey = apiKey;
+    if (inputApiKey && resolvedKey) inputApiKey.dataset.storedKey = resolvedKey;
 
     const storageResult = await getLocal(["llmProvider", "llmModel"]);
     let currentModel = "";
@@ -151,7 +249,7 @@ export async function loadByokSettings(idPrefix: string, apiKey: string) {
     if (storageResult.llmProvider) selectProvider.value = storageResult.llmProvider;
     if (storageResult.llmModel) currentModel = storageResult.llmModel;
 
-    await fetchModels(selectProvider, selectModel, apiKey, currentModel);
+    await fetchModels(selectProvider, selectModel, resolvedKey, currentModel);
 }
 
 export interface ByokFormOptions {
@@ -167,12 +265,34 @@ export async function initializeByokForm(options: ByokFormOptions) {
     const selectModel = document.getElementById(`${idPrefix}select-model`) as HTMLSelectElement | null;
     const inputApiKey = document.getElementById(`${idPrefix}input-api-key`) as HTMLInputElement | null;
     const btnSubmit = document.getElementById(`${idPrefix}btn-submit`) as HTMLButtonElement | null;
+    const btnRevoke = document.getElementById(`${idPrefix}btn-revoke`) as HTMLButtonElement | null;
     const statusMsg = document.getElementById(`${idPrefix}status-message`);
     const apiKeyHelp = document.getElementById(`${idPrefix}api-key-help`);
 
     if (!selectProvider || !selectModel || !inputApiKey || !btnSubmit) {
         console.warn("BYOK Form core elements not found for prefix:", idPrefix);
         return;
+    }
+
+    // Show the revoke button only when a key is already stored
+    if (btnRevoke && isSettingsMode) {
+        const existingKey = await getByokApiKey();
+        if (existingKey) btnRevoke.classList.remove("hidden");
+
+        btnRevoke.addEventListener("click", async () => {
+            btnRevoke.disabled = true;
+            await setLocal({ encryptedApiKey: null, plaintextApiKey: null, apiMode: "byok" });
+            inputApiKey.value = "";
+            delete inputApiKey.dataset.storedKey;
+            btnRevoke.classList.add("hidden");
+            selectModel.innerHTML = `<option value="">Enter API Key to load models...</option>`;
+            selectModel.disabled = true;
+            if (statusMsg) {
+                statusMsg.textContent = "API key removed.";
+                statusMsg.style.color = "var(--color-text-muted)";
+                statusMsg.classList.remove("hidden");
+            }
+        });
     }
 
     if (isSettingsMode) {
@@ -224,8 +344,8 @@ export async function initializeByokForm(options: ByokFormOptions) {
             if (key.length > 0) {
                 isNewKey = true;
                 storagePayload.apiMode = "byok";
-                storagePayload.plaintextApiKey = key;
-
+                storagePayload.encryptedApiKey = await encryptApiKey(key);
+                storagePayload.plaintextApiKey = null;
             }
 
             if (!isSettingsMode) {

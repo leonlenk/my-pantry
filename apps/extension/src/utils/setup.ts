@@ -79,7 +79,6 @@ btnOauth?.addEventListener("click", async () => {
     const redirectTo = "https://mypantry.dev/api/auth/callback";
     const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=consent`;
 
-    console.log("[OAuth] Opening auth tab:", authUrl);
     chrome.tabs.create({ url: authUrl });
 });
 

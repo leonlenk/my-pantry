@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from upstash_redis import Redis
 from src.config import settings
 from loguru import logger
@@ -87,3 +87,61 @@ def check_rate_limit_and_telemetry(
     except Exception as e:
         logger.error(f"Redis error in rate_limit: {e}")
         raise HTTPException(status_code=503, detail="Rate limiting service unavailable")
+
+
+def check_public_rate_limit(request: Request, endpoint: str, daily_limit: int, weekly_limit: int):
+    """
+    IP-based fixed-window rate limiter for public (unauthenticated) endpoints.
+    Falls back silently if the client IP cannot be determined.
+    """
+    forwarded_for = request.headers.get("x-forwarded-for") or ""
+    if forwarded_for:
+        # Use the rightmost IP, which is appended by the nearest trusted proxy
+        # and cannot be injected by the originating client (unlike the leftmost).
+        client_ip = forwarded_for.split(",")[-1].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+
+    # Truncate to prevent key abuse with malformed headers
+    client_ip = client_ip[:64]
+
+    try:
+        now = int(time.time())
+
+        daily_window = now // _DAILY_WINDOW
+        daily_key = f"public_rate:{endpoint}:ip:{client_ip}:daily:{daily_window}"
+        daily_count = _incr_with_expiry(daily_key, _DAILY_WINDOW)
+
+        if daily_count > daily_limit:
+            reset_at = (daily_window + 1) * _DAILY_WINDOW
+            logger.warning(
+                f"Public daily rate limit exceeded: ip={client_ip} endpoint={endpoint} "
+                f"count={daily_count}/{daily_limit}"
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={"message": "Daily limit reached", "reset_at": reset_at},
+                headers={"Retry-After": str(reset_at - now)},
+            )
+
+        weekly_window = now // _WEEKLY_WINDOW
+        weekly_key = f"public_rate:{endpoint}:ip:{client_ip}:weekly:{weekly_window}"
+        weekly_count = _incr_with_expiry(weekly_key, _WEEKLY_WINDOW)
+
+        if weekly_count > weekly_limit:
+            reset_at = (weekly_window + 1) * _WEEKLY_WINDOW
+            logger.warning(
+                f"Public weekly rate limit exceeded: ip={client_ip} endpoint={endpoint} "
+                f"count={weekly_count}/{weekly_limit}"
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={"message": "Weekly limit reached", "reset_at": reset_at},
+                headers={"Retry-After": str(reset_at - now)},
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Never block a public request due to a Redis failure
+        logger.error(f"Redis error in public rate_limit: {e}")

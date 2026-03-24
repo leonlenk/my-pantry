@@ -71,6 +71,14 @@ const { idPrefix = "byok-" } = Astro.props;
         Save Key
     </button>
 
+    <button
+        id={`${idPrefix}btn-revoke`}
+        class="btn hidden"
+        style="width: 100%; margin-top: 8px; background: none; border: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 0.85rem;"
+    >
+        Remove saved key
+    </button>
+
     <div
         id={`${idPrefix}status-message`}
         style="margin-top: 8px; font-size: 0.85rem; text-align: center; color: var(--color-accent);"

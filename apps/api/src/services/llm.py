@@ -67,7 +67,7 @@ Payload:
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -102,7 +102,7 @@ def get_substitution(recipe_context: dict, target_ingredient: str) -> Substituti
     prompt = f"Analyze this recipe: {recipe_context}\n\nThe user wants a substitution for: {target_ingredient}.\nAnalyze its chemical and culinary role in the recipe and output a mathematically adjusted substitution."
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

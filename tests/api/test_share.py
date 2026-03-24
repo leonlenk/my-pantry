@@ -53,7 +53,7 @@ def _past_expiry():
 
 class TestSharePost:
 
-    def test_share_single_recipe_returns_url(self, client, mock_verify_jwt):
+    def test_share_single_recipe_returns_url(self, client, mock_verify_jwt, mock_rate_limit):
         """Sharing one recipe returns a single URL string."""
         mock_client, _, _ = _build_share_mock()
         with _share_patch(mock_client):
@@ -66,7 +66,7 @@ class TestSharePost:
         assert "url" in body
         assert "/s/" in body["url"]
 
-    def test_share_batch_returns_one_url(self, client, mock_verify_jwt):
+    def test_share_batch_returns_one_url(self, client, mock_verify_jwt, mock_rate_limit):
         """Multiple recipes in the batch produce a single shared URL (one DB row)."""
         mock_client, _, _ = _build_share_mock()
         recipes = [
@@ -83,7 +83,7 @@ class TestSharePost:
         assert isinstance(body["url"], str)
         assert "/s/" in body["url"]
 
-    def test_share_url_uses_public_base_url(self, client, mock_verify_jwt):
+    def test_share_url_uses_public_base_url(self, client, mock_verify_jwt, mock_rate_limit):
         """The returned URL is built from settings.public_base_url."""
         mock_client, _, _ = _build_share_mock()
         # settings is a module-level singleton; patch the attribute directly.
@@ -91,6 +91,8 @@ class TestSharePost:
              patch("src.routers.share.settings") as mock_settings:
             mock_settings.public_base_url = "https://example.dev"
             mock_settings.share_expiry_days = 30
+            mock_settings.share_daily_limit = 100
+            mock_settings.share_weekly_limit = 500
             resp = client.post(
                 "/api/share",
                 json={"recipes": [{"id": "r1", "title": "Test"}]},
@@ -99,7 +101,7 @@ class TestSharePost:
         url = resp.json()["url"]
         assert url.startswith("https://example.dev/s/")
 
-    def test_share_strips_embedding(self, client, mock_verify_jwt):
+    def test_share_strips_embedding(self, client, mock_verify_jwt, mock_rate_limit):
         """The embedding field is stripped before inserting into shared_recipes."""
         mock_client, chain, _ = _build_share_mock()
         recipe = {"id": "r1", "title": "Soup", "embedding": [0.1, 0.2, 0.3]}
@@ -112,7 +114,7 @@ class TestSharePost:
         for clean_recipe in row["recipe_json"]:
             assert "embedding" not in clean_recipe
 
-    def test_share_strips_tags(self, client, mock_verify_jwt):
+    def test_share_strips_tags(self, client, mock_verify_jwt, mock_rate_limit):
         """Personal tags are stripped before inserting into shared_recipes."""
         mock_client, chain, _ = _build_share_mock()
         recipe = {"id": "r1", "title": "Soup", "tags": ["dinner", "easy"]}
@@ -125,7 +127,7 @@ class TestSharePost:
         for clean_recipe in row["recipe_json"]:
             assert "tags" not in clean_recipe
 
-    def test_share_recipe_json_is_array(self, client, mock_verify_jwt):
+    def test_share_recipe_json_is_array(self, client, mock_verify_jwt, mock_rate_limit):
         """recipe_json stored in DB is always a JSON array (even for one recipe)."""
         mock_client, chain, _ = _build_share_mock()
         with _share_patch(mock_client):
@@ -137,19 +139,19 @@ class TestSharePost:
         row = insert_call[0][0]
         assert isinstance(row["recipe_json"], list)
 
-    def test_share_empty_list_returns_400(self, client, mock_verify_jwt):
-        """Empty recipes list is rejected with 400."""
+    def test_share_empty_list_returns_422(self, client, mock_verify_jwt, mock_rate_limit):
+        """Empty recipes list is rejected at the Pydantic validation layer (422)."""
         mock_client, _, _ = _build_share_mock()
         with _share_patch(mock_client):
             resp = client.post("/api/share", json={"recipes": []})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_share_unauthenticated_returns_401(self, client):
         """Request without auth header returns 401/403."""
         resp = client.post("/api/share", json={"recipes": [{"id": "r1"}]})
         assert resp.status_code in (401, 403)
 
-    def test_share_supabase_error_returns_500(self, client, mock_verify_jwt):
+    def test_share_supabase_error_returns_500(self, client, mock_verify_jwt, mock_rate_limit):
         """Supabase failure returns 500."""
         mock_client = MagicMock()
         chain = MagicMock()
@@ -164,7 +166,7 @@ class TestSharePost:
             )
         assert resp.status_code == 500
 
-    def test_share_id_is_url_safe(self, client, mock_verify_jwt):
+    def test_share_id_is_url_safe(self, client, mock_verify_jwt, mock_rate_limit):
         """Generated share IDs contain only URL-safe characters."""
         import re
         mock_client, _, _ = _build_share_mock()
@@ -178,6 +180,15 @@ class TestSharePost:
         share_id = url.split("/s/")[-1]
         # secrets.token_urlsafe produces only A-Z a-z 0-9 - _
         assert re.fullmatch(r"[A-Za-z0-9\-_]+", share_id), f"Non-URL-safe ID: {share_id!r}"
+
+    def test_share_rate_limited(self, client, mock_verify_jwt):
+        """When the rate limiter raises 429, the endpoint propagates it."""
+        with patch(
+            "src.routers.share.check_rate_limit_and_telemetry",
+            side_effect=__import__("fastapi").HTTPException(status_code=429, detail="Rate limit exceeded"),
+        ):
+            resp = client.post("/api/share", json={"recipes": [{"id": "r1", "title": "Soup"}]})
+        assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------

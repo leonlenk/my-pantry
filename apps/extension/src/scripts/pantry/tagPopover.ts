@@ -2,6 +2,8 @@
  * Tag overflow popover — shown when a recipe card has more tags than fit inline.
  */
 
+import { escapeHtml } from "../../utils/conversions";
+
 let activePopoverAnchor: HTMLElement | null = null;
 
 export function showTagPopover(anchor: HTMLElement, tags: string[]) {
@@ -10,7 +12,7 @@ export function showTagPopover(anchor: HTMLElement, tags: string[]) {
 
     const popover = document.createElement("div");
     popover.className = "tag-overflow-popover";
-    popover.innerHTML = tags.map((t) => `<span class="tag">${t}</span>`).join("");
+    popover.innerHTML = tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("");
     document.body.appendChild(popover);
 
     // Position after paint so getBoundingClientRect is accurate

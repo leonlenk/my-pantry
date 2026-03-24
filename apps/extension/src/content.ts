@@ -15,12 +15,9 @@ import { MSG } from "./utils/messages";
 // OAuth, Supabase redirects here and appends the session to the URL hash.
 // We parse the hash and relay the tokens to the background worker, which
 // persists them and closes this tab.
-console.log(`[PantryClip] Content script loaded on ${window.location.hostname}${window.location.pathname}`);
 if (window.location.hostname.includes('mypantry.dev') && window.location.pathname === '/api/auth/callback') {
-    console.log('[PantryClip] Auth callback page detected. Checking URL hash...');
     // The hash looks like: #access_token=...&refresh_token=...&expires_in=...
     const hash = window.location.hash;
-    console.log('[PantryClip] Raw hash:', hash ? `${hash.substring(0, 50)}...` : 'none');
 
     if (hash && hash.includes('access_token')) {
         try {
@@ -30,17 +27,12 @@ if (window.location.hostname.includes('mypantry.dev') && window.location.pathnam
 
             const accessToken = params.get('access_token');
             const refreshToken = params.get('refresh_token');
-            console.log(`[PantryClip] Parsed access_token: ${accessToken ? 'present' : 'missing'}`);
-            console.log(`[PantryClip] Parsed refresh_token: ${refreshToken ? 'present' : 'missing'}`);
 
             if (accessToken) {
-                console.log('[PantryClip] Sending AUTH_SESSION_CAPTURED message to background...');
                 chrome.runtime.sendMessage({
                     type: MSG.authSessionCaptured,
                     accessToken,
                     refreshToken: refreshToken ?? null,
-                }, (response) => {
-                    console.log('[PantryClip] Response from background:', response);
                 });
             } else {
                 console.error('[PantryClip] Auth callback path hit but no access_token found in URL fragment.');
@@ -48,8 +40,6 @@ if (window.location.hostname.includes('mypantry.dev') && window.location.pathnam
         } catch (e) {
             console.error('[PantryClip] Failed to parse session hash:', e);
         }
-    } else {
-        console.warn('[PantryClip] Hash does not contain "access_token"');
     }
 }
 

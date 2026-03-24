@@ -8,7 +8,7 @@
  *   - Logout and switch account
  */
 
-import { initializeByokForm, loadByokSettings } from "../../utils/byok";
+import { initializeByokForm, loadByokSettings, getByokApiKey } from "../../utils/byok";
 import { getLocal, setLocal, removeLocal, AUTH_KEYS } from "../../utils/storage";
 import { MSG } from "../../utils/messages";
 import { parseJwt } from "../../utils/authUtils";
@@ -92,7 +92,6 @@ async function executeExtraction(apiKey: string, llmModel: string, llmProvider: 
         return;
     }
 
-    console.log(`[MyPantry] Triggering background extraction for tab: ${tab.url}`);
     chrome.runtime.sendMessage({
         type: MSG.startExtraction,
         tabId: tab.id,
@@ -116,17 +115,17 @@ async function clearAuthAndClose() {
 document.addEventListener("DOMContentLoaded", async () => {
     try {
         if (typeof chrome !== "undefined" && chrome.storage) {
-            const data = await getLocal(["setupComplete", "plaintextApiKey", "supabaseToken", "identityMode", "apiMode"]);
+            const data = await getLocal(["setupComplete", "encryptedApiKey", "plaintextApiKey", "supabaseToken", "identityMode", "apiMode"]);
 
-            // Sanitize: if the stored key is not a valid plain string (old encrypted format),
-            // clear it so the user is prompted to re-enter rather than getting silent 401s.
-            const validKey = getValidStoredKey(data.plaintextApiKey);
-            if (data.plaintextApiKey && !validKey) {
+            // Sanitize: clear any legacy plaintext key that slipped past the old validator.
+            // Encrypted keys are always stored as encryptedApiKey; plaintextApiKey is migration-only.
+            if (data.plaintextApiKey && !getValidStoredKey(data.plaintextApiKey)) {
                 await removeLocal(["plaintextApiKey"]);
             }
 
+            const hasByokKey = !!(data.encryptedApiKey || getValidStoredKey(data.plaintextApiKey));
             const hasAuth =
-                data.setupComplete || validKey || data.supabaseToken;
+                data.setupComplete || hasByokKey || data.supabaseToken;
 
             if (!hasAuth) {
                 chrome.tabs.create({ url: chrome.runtime.getURL("setup.html") });
@@ -323,11 +322,10 @@ apiSettingsBtn?.addEventListener("click", async () => {
 
     if (!actionCard || !settingsPanel) return;
 
-    const storageResult = await getLocal(["plaintextApiKey"]);
-
     actionCard.classList.add("hidden");
     settingsPanel.classList.remove("hidden");
-    await loadByokSettings("popup-byok-", getValidStoredKey(storageResult.plaintextApiKey) || "");
+    // loadByokSettings now reads the key from storage internally
+    await loadByokSettings("popup-byok-");
 });
 
 btnBackSettings?.addEventListener("click", () => {
@@ -346,15 +344,15 @@ extractBtn?.addEventListener("click", async () => {
     }
 
     try {
-        const storageResult = await getLocal(["plaintextApiKey", "supabaseToken", "llmModel", "llmProvider", "apiMode"]);
+        const storageResult = await getLocal(["supabaseToken", "llmModel", "llmProvider", "apiMode"]);
+        const byokKey = await getByokApiKey();
 
         // Backward compat: derive apiMode from token presence if not stored
         const apiMode: "cloud" | "byok" =
             storageResult.apiMode ?? (storageResult.supabaseToken ? "cloud" : "byok");
 
         const hasCloudMode = apiMode === "cloud" && !!storageResult.supabaseToken;
-        const storedKey = getValidStoredKey(storageResult.plaintextApiKey);
-        const hasPlaintextKey = apiMode === "byok" && !!storedKey;
+        const hasPlaintextKey = apiMode === "byok" && !!byokKey;
 
         const llmModel = storageResult.llmModel || "gemini-2.5-flash";
         const llmProvider = storageResult.llmProvider || (hasCloudMode ? "google" : "anthropic");
@@ -365,7 +363,7 @@ extractBtn?.addEventListener("click", async () => {
             addStatusMessage("Starting extraction...");
 
             try {
-                const activeKey = hasCloudMode ? storageResult.supabaseToken : storedKey;
+                const activeKey = hasCloudMode ? storageResult.supabaseToken : byokKey;
                 const authMode = hasCloudMode ? "cloud" : "byok";
                 await executeExtraction(activeKey, llmModel, llmProvider, authMode);
             } catch (err: any) {

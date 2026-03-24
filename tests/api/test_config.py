@@ -27,7 +27,7 @@ class TestSettings:
         s = Settings(_env_file=None)
         assert s.supabase_url == "https://fake.supabase.co"
         assert s.gemini_api_key == "fake-gemini-key"
-        assert s.extension_id == "fake-extension-id"
+        assert s.extension_id == "abcdefghijklmnopabcdefghijklmnop"
 
     def test_default_max_payload_chars(self, _patch_env, monkeypatch):
         """Default max_payload_chars is 20000 when not overridden."""

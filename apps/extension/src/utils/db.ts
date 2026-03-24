@@ -42,15 +42,39 @@ function openDb(): Promise<IDBDatabase> {
     });
 }
 
-/**
- * Persists a recipe object (with embedding) to IndexedDB.
- * Uses `put` so re-extracting the same URL simply updates the existing record.
- */
+/** Warn when storage usage exceeds this fraction of the quota. */
+const _STORAGE_WARN_RATIO = 0.85;
+
+async function _checkStorageQuota(): Promise<void> {
+    if (!navigator.storage?.estimate) return;
+    try {
+        const { usage = 0, quota = 1 } = await navigator.storage.estimate();
+        const ratio = usage / quota;
+        if (ratio >= _STORAGE_WARN_RATIO) {
+            const usedMb = (usage / 1_048_576).toFixed(1);
+            const quotaMb = (quota / 1_048_576).toFixed(1);
+            console.warn(
+                `[DB] Storage quota warning: ${usedMb} MB used of ${quotaMb} MB (${(ratio * 100).toFixed(0)}%). ` +
+                "Consider exporting and deleting some recipes."
+            );
+            // Notify the pantry page if we're in a DOM context (not a service worker)
+            if (typeof document !== "undefined") {
+                document.dispatchEvent(
+                    new CustomEvent("db:storageWarning", { detail: { usedMb, quotaMb } })
+                );
+            }
+        }
+    } catch {
+        // Quota API unavailable — silently skip
+    }
+}
+
 /**
  * Persists a recipe object (with embedding) to IndexedDB
  * and updates the saved URLs cache in chrome.storage.local.
  */
 export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
+    await _checkStorageQuota();
     recipe.tags = normalizeTags(recipe.tags);
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -77,9 +101,13 @@ export async function saveRecipeLocally(recipe: Recipe): Promise<void> {
 
     oramaDb = null; // Invalidate cache
 
-    // Fire-and-forget cloud sync — a failure here must never surface to the user.
-    console.log(`[DB] Initiating cloud sync for recipe '${recipe.id}'...`);
-    syncRecipeToCloud(recipe).catch((e) => console.warn("[Sync] Unexpected cloud save error:", e));
+    // Fire-and-forget cloud sync — record failure in storage for the UI to surface.
+    syncRecipeToCloud(recipe)
+        .then(() => setLocal({ syncError: null }))
+        .catch((e) => {
+            console.warn("[Sync] Unexpected cloud save error:", e);
+            setLocal({ syncError: `Failed to sync "${recipe.title || recipe.id}" — ${e?.message ?? "network error"}` }).catch(() => {});
+        });
 }
 
 /**
@@ -122,9 +150,13 @@ export async function importRecipesLocally(recipes: Recipe[]): Promise<void> {
 
     oramaDb = null; // Invalidate cache
 
-    // Fire-and-forget cloud batch sync
-    console.log(`[DB] Initiating batch cloud sync for ${recipes.length} imported recipes...`);
-    syncBatchToCloud(recipes).catch((e) => console.warn("[Sync] Unexpected cloud batch save error:", e));
+    // Fire-and-forget cloud batch sync — record failure in storage for the UI to surface.
+    syncBatchToCloud(recipes)
+        .then(() => setLocal({ syncError: null }))
+        .catch((e) => {
+            console.warn("[Sync] Unexpected cloud batch save error:", e);
+            setLocal({ syncError: `Failed to sync batch of ${recipes.length} recipes — ${e?.message ?? "network error"}` }).catch(() => {});
+        });
 }
 
 /**

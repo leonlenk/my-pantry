@@ -37,10 +37,12 @@ class TestSyncSave:
         assert "embedding" not in row["recipe_json"]
 
     def test_save_missing_id(self, client, mock_verify_jwt, mock_supabase):
-        """Recipe without 'id' field returns 400."""
+        """Recipe without 'id' field returns 422 (Pydantic validation error)."""
         resp = client.post("/api/sync/save", json={"recipe": {"title": "No ID"}})
-        assert resp.status_code == 400
-        assert "id" in resp.json()["detail"].lower()
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        # Pydantic returns a list of validation errors; check one mentions "id"
+        assert any("id" in str(err).lower() for err in detail)
 
     def test_save_unauthenticated(self, client):
         """Request without auth returns 401/403."""
@@ -245,7 +247,7 @@ class TestSyncListEdgeCases:
         assert len(body["recipes"]) == 2
 
     def test_list_generator_exception_returns_partial_json(self, client, mock_verify_jwt):
-        """When Supabase raises inside the generator, the response ends abruptly."""
+        """When Supabase raises inside the generator, the response includes an error sentinel."""
         mock_client = MagicMock()
         chain = MagicMock()
         chain.select.return_value = chain

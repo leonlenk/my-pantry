@@ -71,12 +71,14 @@ subSendBtn?.addEventListener("click", async () => {
     subResultArea?.classList.add("hidden");
     if (subStatusText) subStatusText.textContent = "Starting AI substitution analysis...";
 
-    const { plaintextApiKey, supabaseToken, llmModel, llmProvider, apiMode } =
-        await getLocal(["plaintextApiKey", "supabaseToken", "llmModel", "llmProvider", "apiMode"]);
+    const { supabaseToken, llmModel, llmProvider, apiMode } =
+        await getLocal(["supabaseToken", "llmModel", "llmProvider", "apiMode"]);
     const provider = llmProvider || "anthropic";
 
     const resolvedApiMode = apiMode ?? (supabaseToken ? "cloud" : "byok");
-    const apiKey = resolvedApiMode === "cloud" ? supabaseToken : plaintextApiKey;
+    const { getByokApiKey } = await import("../../utils/byok");
+    const byokKey = resolvedApiMode === "byok" ? await getByokApiKey() : null;
+    const apiKey = resolvedApiMode === "cloud" ? supabaseToken : byokKey;
     const authMode = resolvedApiMode === "cloud" ? "cloud" : "byok";
 
     if (!apiKey) {
@@ -128,8 +130,16 @@ chrome.runtime.onMessage.addListener((message: any) => {
                     currentSubResult.substitutions.forEach((sub: any, i: number) => {
                         const label = document.createElement("label");
                         label.className = "suggestion-label";
-                        label.innerHTML = `<input type="checkbox" class="sub-checkbox" data-index="${i}" checked />
-                                           <span class="suggestion-text">${sub.rawText}</span>`;
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.className = "sub-checkbox";
+                        checkbox.dataset.index = String(i);
+                        checkbox.checked = true;
+                        const span = document.createElement("span");
+                        span.className = "suggestion-text";
+                        span.textContent = sub.rawText;
+                        label.appendChild(checkbox);
+                        label.appendChild(span);
                         subSuggestionsContainer.appendChild(label);
                     });
                 }

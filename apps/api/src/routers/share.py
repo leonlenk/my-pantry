@@ -14,15 +14,17 @@ GET  /s/{id}     — Public (no auth). Serves either:
 
 import json as _json
 import secrets
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from loguru import logger
 
 from src.dependencies.auth import verify_jwt
+from src.dependencies.rate_limit import check_public_rate_limit, check_rate_limit_and_telemetry
 from src.services.supabase_client import get_supabase_client
 from src.config import settings
 
@@ -38,6 +40,13 @@ TABLE = "shared_recipes"
 
 class ShareRecipesRequest(BaseModel):
     recipes: list[dict[str, Any]]
+
+    @field_validator("recipes")
+    @classmethod
+    def recipes_not_empty(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not v:
+            raise ValueError("No recipes provided.")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +125,16 @@ def _format_ingredient_text(ing: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Helpers — HTML fragments
 # ---------------------------------------------------------------------------
+
+def _safe_image_url(url: str) -> str | None:
+    """Return the URL only if it is a safe absolute https:// URL; else None."""
+    if not url or not isinstance(url, str):
+        return None
+    stripped = url.strip()
+    if stripped.startswith("https://"):
+        return stripped
+    return None
+
 
 def _esc(text: str) -> str:
     return (
@@ -233,7 +252,7 @@ def _page_shell(
       {nav_right}
       <p class="install-prompt" id="install-prompt">
         Don&rsquo;t have MyPantry?
-        <a href="https://chromewebstore.google.com/detail/mypantry/placeholder" target="_blank" rel="noopener">Install &rarr;</a>
+        <a href="https://chromewebstore.google.com/detail/mypantry/{settings.extension_id}" target="_blank" rel="noopener">Install &rarr;</a>
       </p>
     </div>
   </nav>
@@ -282,7 +301,7 @@ def _render_single_recipe_page(recipe: dict[str, Any], expiry_days: int) -> str:
     title = recipe.get("title", "Untitled Recipe")
     description = recipe.get("semantic_summary", "")
     author = recipe.get("author", "")
-    image = recipe.get("image", "")
+    image = _safe_image_url(recipe.get("image", ""))
     servings = recipe.get("servings")
     yield_text = recipe.get("yield", "")
     source_url = recipe.get("url", "")
@@ -371,7 +390,7 @@ _PANTRY_CSS = """
 def _render_mini_card(recipe: dict[str, Any], index: int) -> str:
     title = recipe.get("title", "Untitled")
     description = recipe.get("semantic_summary", "")
-    image = recipe.get("image", "")
+    image = _safe_image_url(recipe.get("image", ""))
     ingredients: list = recipe.get("ingredients", [])
 
     if image:
@@ -435,9 +454,10 @@ def _save_js(single: bool) -> str:
       marked after a page refresh (keyed by share ID + recipe index)
     - For multi-recipe pages: tracks unsaved count and keeps Save All updated
     """
+    store_url = f"https://chromewebstore.google.com/detail/mypantry/{settings.extension_id}"
     if single:
-        return _save_js_single()
-    return _save_js_multi()
+        return _save_js_single().replace("__STORE_URL__", store_url)
+    return _save_js_multi().replace("__STORE_URL__", store_url)
 
 
 def _save_js_single() -> str:
@@ -475,13 +495,12 @@ def _save_js_single() -> str:
   if (isSaved()) { setSavedUI(); return; }
 
   // ── Wait for content script to inject the extension marker ────────────────
-  setTimeout(function () {
-    var hasExtension = !!document.getElementById('__mypantry_installed');
+  function _initSaveButton(hasExtension) {
     if (!hasExtension) {
       if (installPrompt) installPrompt.style.display = 'block';
       var btn = document.getElementById('save-btn');
       if (btn) btn.addEventListener('click', function () {
-        window.open('https://chromewebstore.google.com/detail/mypantry/placeholder', '_blank');
+        window.open('__STORE_URL__', '_blank');
       });
       return;
     }
@@ -505,7 +524,21 @@ def _save_js_single() -> str:
         saveBtn.textContent = 'Save to MyPantry';
       }
     });
-  }, 300);
+  }
+
+  if (document.getElementById('__mypantry_installed')) {
+    _initSaveButton(true);
+  } else {
+    var _obs = new MutationObserver(function (_, obs) {
+      if (document.getElementById('__mypantry_installed')) {
+        obs.disconnect();
+        clearTimeout(_fallback);
+        _initSaveButton(true);
+      }
+    });
+    _obs.observe(document.documentElement, { childList: true, subtree: true });
+    var _fallback = setTimeout(function () { _obs.disconnect(); _initSaveButton(false); }, 1500);
+  }
 })();"""
 
 
@@ -590,13 +623,12 @@ def _save_js_multi() -> str:
   }
 
   // ── Wait for content script to inject the extension marker ────────────────
-  setTimeout(function () {
-    var hasExtension = !!document.getElementById('__mypantry_installed');
+  function _initSaveButtons(hasExtension) {
     if (!hasExtension) {
       if (installPrompt) installPrompt.style.display = 'block';
       document.querySelectorAll('.save-btn, .save-all-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          window.open('https://chromewebstore.google.com/detail/mypantry/placeholder', '_blank');
+          window.open('__STORE_URL__', '_blank');
         });
       });
       return;
@@ -641,7 +673,21 @@ def _save_js_multi() -> str:
         window.postMessage({ type: 'MYPANTRY_SAVE_RECIPE', recipes: toSave }, '*');
       });
     }
-  }, 300);
+  }
+
+  if (document.getElementById('__mypantry_installed')) {
+    _initSaveButtons(true);
+  } else {
+    var _obs = new MutationObserver(function (_, obs) {
+      if (document.getElementById('__mypantry_installed')) {
+        obs.disconnect();
+        clearTimeout(_fallback);
+        _initSaveButtons(true);
+      }
+    });
+    _obs.observe(document.documentElement, { childList: true, subtree: true });
+    var _fallback = setTimeout(function () { _obs.disconnect(); _initSaveButtons(false); }, 1500);
+  }
 })();"""
 
 
@@ -689,8 +735,7 @@ def share_recipes(
     All recipes are stored together in one row; tags and embeddings are stripped.
     Returns one URL regardless of how many recipes are in the batch.
     """
-    if not request.recipes:
-        raise HTTPException(status_code=400, detail="No recipes provided.")
+    check_rate_limit_and_telemetry(user_id=user_id, endpoint="share", daily_limit=settings.share_daily_limit, weekly_limit=settings.share_weekly_limit)
 
     share_id = _short_id()
     expiry_days = settings.share_expiry_days
@@ -704,6 +749,7 @@ def share_recipes(
         client = get_supabase_client()
         client.table(TABLE).insert({
             "id": share_id,
+            "user_id": user_id,
             "recipe_json": cleaned,   # always an array, even for a single recipe
             "expires_at": expires_at,
         }).execute()
@@ -711,7 +757,7 @@ def share_recipes(
             f"[Share] User {user_id} shared {len(cleaned)} recipe(s) → id={share_id}"
         )
     except Exception as e:
-        logger.error(f"[Share] Insert failed: {e}")
+        logger.error(f"[Share] Insert failed: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Failed to create share link.")
 
     base_url = settings.public_base_url.rstrip("/")
@@ -723,7 +769,13 @@ def share_recipes(
 # ---------------------------------------------------------------------------
 
 @public_router.get("/s/{share_id}", response_class=HTMLResponse)
-def view_shared_recipe(share_id: str):
+def view_shared_recipe(share_id: str, request: Request):
+    check_public_rate_limit(
+        request,
+        endpoint="share_view",
+        daily_limit=settings.share_daily_limit,
+        weekly_limit=settings.share_weekly_limit,
+    )
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
         client = get_supabase_client()

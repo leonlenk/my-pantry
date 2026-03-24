@@ -39,7 +39,7 @@ export function isTokenExpired(token: string, bufferMinutes: number = 5): boolea
  * Returns the fresh access token, or null if refresh fails.
  */
 export async function refreshSupabaseToken(): Promise<string | null> {
-    const stored = await getLocal(["supabaseRefreshToken", "supabaseToken", "supabaseUrl", "supabaseAnonKey"]);
+    const stored = await getLocal(["supabaseRefreshToken", "supabaseToken", "supabaseUrl", "supabaseAnonKey", "apiMode"]);
 
     const supabaseUrl = stored.supabaseUrl;
     const supabaseAnonKey = stored.supabaseAnonKey;
@@ -51,8 +51,8 @@ export async function refreshSupabaseToken(): Promise<string | null> {
         return null;
     }
 
-    if (!supabaseUrl || supabaseUrl.includes("your-project-ref")) {
-        // BYOK mode — no Supabase configured, skip refresh
+    if (stored.apiMode === "byok" || !supabaseUrl || supabaseUrl.includes("your-project-ref")) {
+        // BYOK mode or no real Supabase configured — skip refresh
         return currentToken ?? null;
     }
 
@@ -60,7 +60,6 @@ export async function refreshSupabaseToken(): Promise<string | null> {
         return currentToken;
     }
 
-    console.log("[Auth] Token is missing or expiring soon. Attempting refresh...");
 
     if (!supabaseAnonKey) {
         throw new Error("Session expired. Please sign out and sign in again to refresh your credentials.");
@@ -87,7 +86,6 @@ export async function refreshSupabaseToken(): Promise<string | null> {
                 supabaseToken: newAccessToken,
                 supabaseRefreshToken: newRefreshToken ?? refreshToken,
             });
-            console.log("[Auth] Token refreshed successfully.");
             return newAccessToken;
         }
     } catch (err) {
