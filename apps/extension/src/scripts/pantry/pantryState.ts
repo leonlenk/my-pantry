@@ -21,7 +21,7 @@ function loadTagFilters(): string[] {
 
 export const pantryState = {
     currentFilter: localStorage.getItem(LS.pantryFilter) || "all",
-    currentViewMode: localStorage.getItem(LS.pantryViewMode) || "large",
+    currentViewMode: localStorage.getItem(LS.pantryViewMode) || "medium",
     skipNextViewTransition: false,
     currentTagFilters: loadTagFilters(),
     allKnownTags: new Set<string>(),

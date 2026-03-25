@@ -11,9 +11,13 @@
     background: linear-gradient(160deg,
             var(--color-surface) 0%,
             var(--color-bg) 65%);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-border);
     border-radius: 16px;
-    box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: none;
+
+    &:hover {
+        box-shadow: none;
+    }
     // Stay invisible until JS marks the page as ready — prevents fadeUp
     // firing before the grid is stable on mobile (layout-shift flash).
     opacity: 0;
@@ -147,10 +151,29 @@
     }
 
     // ── Full-bleed background image (large card only) ─────────────────────────
-    // When a recipe has a cover image, it is rendered as the card background.
-    // A ::before overlay ensures all text remains readable in both light + dark.
+    // The image lives in .large-card-bg (real <img>) and the gradient overlay
+    // in ::before — both are absolute children clipped by the same parent
+    // overflow: hidden, so corners are pixel-identical with no artifacts.
+    .large-card-bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    }
+
+    &:hover .large-card-bg img {
+        transform: scale(1.06);
+    }
+
     &.has-image {
-        background: var(--card-image-url, none) center / cover no-repeat #e8e2d9;
+        background-color: #e8e2d9;
 
         &::before {
             content: "";
@@ -163,12 +186,12 @@
                 rgba(244, 239, 230, 0.78) 100%
             );
             pointer-events: none;
-            z-index: 0;
+            z-index: 1;
         }
 
-        > * {
+        > *:not(.large-card-bg) {
             position: relative;
-            z-index: 1;
+            z-index: 2;
         }
     }
 
@@ -203,8 +226,6 @@
 
     &:hover {
         transform: translateY(-4px) scale(1.01);
-        box-shadow: 0 16px 36px -8px rgba(74, 64, 54, 0.16), 0 4px 12px rgba(0, 0, 0, 0.06);
-        border-color: rgba(139, 115, 85, 0.35);
 
         &::after {
             transform: scaleX(1);
@@ -507,8 +528,6 @@
     // Disable the top accent bar lift/scale on medium cards (image handles the hover)
     &:hover {
         transform: translateY(-4px) scale(1.005);
-        box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.18);
-        border-color: rgba(139, 115, 85, 0.35);
     }
 }
 
