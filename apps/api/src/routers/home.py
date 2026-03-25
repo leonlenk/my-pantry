@@ -10,11 +10,39 @@ _HOME_HTML = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pantry Clip – MyPantry</title>
     <meta name="description" content="Pantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
+    <link rel="canonical" href="https://mypantry.dev/">
+    <meta name="theme-color" content="#4A4036">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <meta property="og:title" content="Pantry Clip – MyPantry">
     <meta property="og:description" content="Pantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
-    <meta property="og:image" content="/static/pantry_preview.png">
+    <meta property="og:url" content="https://mypantry.dev/">
+    <meta property="og:image" content="https://mypantry.dev/static/pantry_preview.png">
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MyPantry">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pantry Clip – MyPantry">
+    <meta name="twitter:description" content="Pantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
+    <meta name="twitter:image" content="https://mypantry.dev/static/pantry_preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Pantry Clip",
+      "alternateName": "MyPantry",
+      "description": "A privacy-first Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.",
+      "url": "https://mypantry.dev/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Chrome",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "image": "https://mypantry.dev/static/pantry_preview.png"
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">

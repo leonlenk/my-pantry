@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from src.utils.logger import setup_logging
@@ -117,12 +117,9 @@ def auth_callback():
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Authorizing... | MyPantry</title>
+        <meta name="robots" content="noindex, nofollow">
         <meta name="description" content="Securely linking your MyPantry account.">
         <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-        <meta property="og:title" content="MyPantry Authorization">
-        <meta property="og:description" content="Securely linking your MyPantry account.">
-        <meta property="og:image" content="/static/pantry_preview.png">
-        <meta property="og:type" content="website">
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -161,6 +158,18 @@ app.include_router(api_router)
 app.include_router(share.public_router)
 app.include_router(privacy.router)
 app.include_router(home.router)
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap():
+    path = os.path.join(os.path.dirname(__file__), "static", "sitemap.xml")
+    return FileResponse(path, media_type="application/xml")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots():
+    path = os.path.join(os.path.dirname(__file__), "static", "robots.txt")
+    return FileResponse(path, media_type="text/plain")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

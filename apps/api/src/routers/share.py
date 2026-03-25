@@ -234,13 +234,31 @@ def _page_shell(
     extra_css: str,
     js: str,
     expiry_days: int,
+    description: str = "",
+    og_image: str = "",
+    share_id: str = "",
 ) -> str:
+    canonical = f"https://mypantry.dev/s/{share_id}" if share_id else "https://mypantry.dev/"
+    desc_tag = f'<meta name="description" content="{_esc(description)}">' if description else ""
+    og_image_abs = og_image if og_image.startswith("http") else "https://mypantry.dev/static/pantry_preview.png"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title>{_esc(title)} | MyPantry</title>
+  <link rel="canonical" href="{canonical}">
+  {desc_tag}
+  <meta property="og:title" content="{_esc(title)} | MyPantry">
+  <meta property="og:description" content="{_esc(description) if description else 'A recipe shared via MyPantry.'}">
+  <meta property="og:url" content="{canonical}">
+  <meta property="og:image" content="{og_image_abs}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MyPantry">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{_esc(title)} | MyPantry">
+  <meta name="twitter:image" content="{og_image_abs}">
   {_FONTS}
   <style>{_BASE_CSS}{extra_css}</style>
   <script type="application/json" id="recipe-data">{embedded_json}</script>
@@ -272,8 +290,8 @@ def _page_shell(
 
 _SINGLE_CSS = """
 .page { max-width: 740px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
-.hero-img { margin: 0 -1.5rem 2rem; overflow: hidden; max-height: 400px; }
-.hero-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-img { margin: 0 -1.5rem 2rem; overflow: hidden; aspect-ratio: 16/9; max-height: 420px; }
+.hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 h1 { font-family: 'Fraunces', serif; font-size: 2.1rem; line-height: 1.2; margin-bottom: .5rem; }
 .desc { color: #8C7F70; font-size: 1.05rem; margin-bottom: .75rem; }
 .meta { color: #8C7F70; font-size: .875rem; margin-bottom: .5rem; }
@@ -297,7 +315,7 @@ h2 { font-family: 'Fraunces', serif; font-size: 1.3rem; margin-bottom: .9rem; pa
 """
 
 
-def _render_single_recipe_page(recipe: dict[str, Any], expiry_days: int) -> str:
+def _render_single_recipe_page(recipe: dict[str, Any], expiry_days: int, share_id: str = "") -> str:
     title = recipe.get("title", "Untitled Recipe")
     description = recipe.get("semantic_summary", "")
     author = recipe.get("author", "")
@@ -357,7 +375,8 @@ def _render_single_recipe_page(recipe: dict[str, Any], expiry_days: int) -> str:
 
     js = _save_js(single=True)
 
-    return _page_shell(title, body, embedded, nav_right, _SINGLE_CSS, js, expiry_days)
+    return _page_shell(title, body, embedded, nav_right, _SINGLE_CSS, js, expiry_days,
+                       description=description, og_image=image, share_id=share_id)
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +391,7 @@ _PANTRY_CSS = """
 .recipe-card { background: #F4EFE6; border: 1px solid #E8E3D9; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .15s, transform .15s; }
 .recipe-card:hover { box-shadow: 0 8px 24px rgba(74,64,54,.12); transform: translateY(-2px); }
 .card-img { height: 160px; overflow: hidden; background: #E8E3D9; }
-.card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .card-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #8C7F70; font-size: 2.5rem; }
 .card-body { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: .5rem; flex: 1; }
 .card-title { font-family: 'Fraunces', serif; font-size: 1.1rem; line-height: 1.3; color: #4A4036; }
@@ -416,7 +435,7 @@ def _render_mini_card(recipe: dict[str, Any], index: int) -> str:
 </div>"""
 
 
-def _render_mini_pantry_page(recipes: list[dict[str, Any]], expiry_days: int) -> str:
+def _render_mini_pantry_page(recipes: list[dict[str, Any]], expiry_days: int, share_id: str = "") -> str:
     n = len(recipes)
     title = f"{n} recipes shared"
     embedded = _json.dumps(recipes)
@@ -436,7 +455,9 @@ def _render_mini_pantry_page(recipes: list[dict[str, Any]], expiry_days: int) ->
 
     js = _save_js(single=False)
 
-    return _page_shell(title, body, embedded, nav_right, _PANTRY_CSS, js, expiry_days)
+    description = f"{n} recipes shared via MyPantry."
+    return _page_shell(title, body, embedded, nav_right, _PANTRY_CSS, js, expiry_days,
+                       description=description, share_id=share_id)
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +721,7 @@ def _render_404() -> str:
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title>Recipe Not Found | MyPantry</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;1,400&family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
@@ -799,5 +821,5 @@ def view_shared_recipe(share_id: str, request: Request):
     expiry_days = settings.share_expiry_days
 
     if len(recipes) == 1:
-        return HTMLResponse(content=_render_single_recipe_page(recipes[0], expiry_days))
-    return HTMLResponse(content=_render_mini_pantry_page(recipes, expiry_days))
+        return HTMLResponse(content=_render_single_recipe_page(recipes[0], expiry_days, share_id=share_id))
+    return HTMLResponse(content=_render_mini_pantry_page(recipes, expiry_days, share_id=share_id))

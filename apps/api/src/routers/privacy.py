@@ -12,11 +12,17 @@ _PRIVACY_HTML = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy – MyPantry</title>
     <meta name="description" content="MyPantry is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
+    <link rel="canonical" href="https://mypantry.dev/privacy">
+    <meta name="theme-color" content="#4A4036">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <meta property="og:title" content="Privacy Policy – MyPantry">
     <meta property="og:description" content="MyPantry is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
-    <meta property="og:image" content="/static/pantry_preview.png">
+    <meta property="og:url" content="https://mypantry.dev/privacy">
+    <meta property="og:image" content="https://mypantry.dev/static/pantry_preview.png">
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MyPantry">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
