@@ -13,6 +13,7 @@ GET  /s/{id}     — Public (no auth). Serves either:
 """
 
 import json as _json
+import re
 import secrets
 import traceback
 from datetime import datetime, timezone, timedelta
@@ -126,13 +127,25 @@ def _format_ingredient_text(ing: dict[str, Any]) -> str:
 # Helpers — HTML fragments
 # ---------------------------------------------------------------------------
 
+def _upgrade_image_url(url: str) -> str:
+    """Attempt to get a higher-resolution version of common CDN image URLs.
+
+    WordPress: strips the dimension suffix added during media resizing so the
+    original full-size upload is used instead of a thumbnail.
+      e.g. /image-700x467.jpg  →  /image.jpg
+           /image-1024x683.webp →  /image.webp
+    """
+    # WordPress dimension suffix: -WIDTHxHEIGHT before the file extension
+    return re.sub(r"-\d{2,5}x\d{2,5}(\.[a-zA-Z0-9]{2,5})$", r"\1", url)
+
+
 def _safe_image_url(url: str) -> str | None:
     """Return the URL only if it is a safe absolute https:// URL; else None."""
     if not url or not isinstance(url, str):
         return None
     stripped = url.strip()
     if stripped.startswith("https://"):
-        return stripped
+        return _upgrade_image_url(stripped)
     return None
 
 
