@@ -11,7 +11,7 @@ _PRIVACY_HTML = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy – MyPantry Clip</title>
-    <meta name="description" content="MyPantry is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
+    <meta name="description" content="MyPantry Clip is designed privacy-first. Your recipe data lives on your device by default. We never sell your data, run ads, or track your browsing.">
     <link rel="canonical" href="https://mypantry.dev/privacy">
     <meta name="theme-color" content="#4A4036">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">

@@ -8,7 +8,7 @@ _HOME_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyPantry Clip</title>
+    <title>MyPantry Clip – Save &amp; Search Recipes</title>
     <meta name="description" content="MyPantry Clip is a privacy-first, secure Chrome extension that extracts perfectly formatted recipes from any website and lets you search your personal cookbook semantically.">
     <link rel="canonical" href="https://mypantry.dev/">
     <meta name="theme-color" content="#4A4036">
